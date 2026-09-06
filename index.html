@@ -1,0 +1,2019 @@
+<!doctype html>
+<!--
+  Executive Project Dashboard
+  ---------------------------
+  A single-file, dependency-light project dashboard: open index.html in a browser
+  and it runs. No build step, no framework, no server.
+
+  Everything you are likely to change lives in two places in the <script> block:
+    1. `periodJSON`  — one entry per reporting period (the data).
+    2. `PROJECT`, `PHASES`, `DELIVERABLES` — the shape of your project.
+
+  Progress photos and earned-value charts are read from
+  assets/photos/<period-id>/ and are optional; missing files are skipped.
+
+  See README.md for a full walkthrough.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="Executive project dashboard showing weekly and monthly progress, status, schedule and budget health, risks and progress photos." />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2032%2032%22%3E%3Crect%20width%3D%2232%22%20height%3D%2232%22%20rx%3D%227%22%20fill%3D%22%230d6efd%22%2F%3E%3Crect%20x%3D%226%22%20y%3D%2218%22%20width%3D%224%22%20height%3D%228%22%20rx%3D%221%22%20fill%3D%22%23fff%22%2F%3E%3Crect%20x%3D%2212%22%20y%3D%2214%22%20width%3D%224%22%20height%3D%2212%22%20rx%3D%221%22%20fill%3D%22%23fff%22%2F%3E%3Crect%20x%3D%2218%22%20y%3D%2210%22%20width%3D%224%22%20height%3D%2216%22%20rx%3D%221%22%20fill%3D%22%23fff%22%2F%3E%3Crect%20x%3D%2224%22%20y%3D%226%22%20width%3D%224%22%20height%3D%2220%22%20rx%3D%221%22%20fill%3D%22%23fff%22%2F%3E%3C%2Fsvg%3E">
+  <title>Meadowview Community Solar Farm Project Dashboard</title>
+  <!-- Bootstrap CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+  <!-- IBM Plex Sans via Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --font-sans: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    body {background: #f8fafc; font-family: var(--font-sans); font-weight: 400; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale}
+    header.sticky-top {backdrop-filter: saturate(1.2) blur(6px); background: rgba(255,255,255,.85)}
+    h1 {font-family: var(--font-sans); font-weight: 700; letter-spacing: -0.02em;}
+    .period-chip {font-size: .85rem; padding: .15rem .5rem; border-radius: .5rem; background: #eef2ff; color: #4338ca}
+
+    /* Timeline */
+    #timeline {position: relative; height: 20px}
+    #timeline::before {content: ""; position: absolute; left: 16px; right: 16px; top: 50%; height: 2px; background: #e2e8f0}
+    .ticks {position: relative; z-index: 1}
+    .tick-btn {width: 20px; height: 20px; border-radius: 50%; border: 2px solid #6c757d; background: #fff; display: flex; align-items: center; justify-content: center}
+    .tick-btn.active {background: #0d6efd; border-color: #0d6efd}
+    .tick-label {font-size: 10px; color: #475569}
+
+    /* KPI tiles */
+    .metric-stack {display: flex; flex-direction: column; gap: 1rem; height: 100%}
+    .metric-tile {border-radius: .5rem; padding: 1.25rem; color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 108px}
+    .metric-big {font-size: 2rem; font-weight: 700; line-height: 1; letter-spacing: -0.02em}
+    /* Long values (e.g. a phase name) are clamped to two lines with an ellipsis;
+       the full text stays available in the tile's tooltip. */
+    .metric-big.metric-clamp {font-size: 1.25rem; display: -webkit-box; -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical; overflow: hidden; text-overflow: ellipsis; word-break: break-word}
+    .metric-label {font-size: .9rem; opacity: .9}
+    /* Neutral fact tiles — colour reserved for status (RAG / SPI / CPI) and variance */
+    .metric-tile.tile-neutral {background: transparent; color: #1f2937}
+    .metric-tile.tile-neutral .metric-label {color: #6b7280; opacity: 1}
+    .metric-tile.tile-accent .metric-big {color: #0d6efd}
+    .metric-tile.bg-warning {color: #1f2937}
+
+    /* Activities bar chart (pure CSS) */
+    .act-row {display: flex; align-items: center; gap: .75rem; margin: 10px 0}
+    .act-name {flex: 0 0 220px; font-size: .95rem}
+    .act-bars {flex: 1; display: flex; gap: 10px}
+    .bar {position: relative; height: 24px; border-radius: 6px; background: #e5e7eb; overflow: hidden; flex: 1}
+    .bar > span {display: block; height: 100%}
+    .bar.actual > span {background: #0d6efd}
+    .bar.planned > span {background: #22c55e}
+    .bar .pct {position: absolute; right: 6px; top: 50%; transform: translateY(-50%); color: #222; font-size: .9rem; text-shadow: 0 1px 0 rgba(0,0,0,.25)}
+
+    .card {border-radius: .5rem}
+    .card-body {border-radius: .5rem}
+    .card-header {color: #fff; font-family: var(--font-sans); font-weight: 600}
+    .legend-dot {width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 6px}
+
+    .empty-state {color: #94a3b8; font-style: italic}
+
+    /* Photos gallery */
+    .photo-thumb {object-fit: cover; width: 100%; height: 160px}
+    .photo-grid .col {transition: transform .15s ease}
+    .photo-grid .col:hover {transform: translateY(-2px)}
+    .carousel-inner {border-radius: calc(0.5rem - 1px);}
+    .carousel-item img {border-radius: calc(0.5rem - 1px);}
+    .modal-body {position: relative;}
+    .btn-close {padding: calc(1rem * .5) calc(1rem * .5); margin: calc(-.5 * 1rem) calc(-.5 * 1rem) calc(-.5 * 1rem) auto; filter: invert(1) grayscale(100%) brightness(200%); position: absolute; top: 1rem; right: 1rem; z-index: 2}
+
+    @media (min-width: 768px) {.metric-big {font-size: 1.65rem}}
+    
+    
+    /* Row-1 status/date tiles: even 2x2 grid that fills the summary height */
+    /* Key dates / phase: 2x2 grid that matches the height of the chart beside it */
+    #keyDates {display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: 1fr; gap: 1rem}
+    @media (min-width: 992px) {#keyDates {height: 100%}}
+
+    /* The Budget and Schedule groups split their column's height evenly, so the
+       column matches the height of the Executive Summary and Overall status
+       beside it. Only from xl up, where the three columns sit side by side. */
+    @media (min-width: 1200px) {
+      .metric-stack > .row {flex: 1 1 0; min-height: 0}
+      .metric-big {font-size: 1.2rem}
+    }
+
+    @media (min-width: 1400px) {.metric-big {font-size: 1.48rem}}
+
+    /* Overall progress chart (Actual vs Planned) inside the Schedule group */
+    .progress-bars {display: flex; flex-direction: column; gap: .4rem}
+    /* .bar is flex:1 for the side-by-side activity rows; here the bars stack, so
+       fix their height instead or flex-basis:0 would collapse them. */
+    .progress-bars .bar {flex: 0 0 20px; height: 20px}
+    .progress-figures {display: flex; flex-direction: column; gap: .1rem; margin-top: .5rem; font-size: .78rem; color: #374151}
+  </style>
+</head>
+<body>
+  <!-- Sticky Header / Controls -->
+  <header class="sticky-top border-bottom mb-1">
+    <div class="container py-3">
+      <div class="d-flex flex-wrap align-items-center gap-2">
+        <h1 class="h4 mb-0 me-auto d-flex align-items-center gap-2">
+          <svg width="30" height="30" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Project Dashboard">
+            <rect width="32" height="32" rx="7" fill="#0d6efd"/>
+            <rect x="6" y="18" width="4" height="8" rx="1" fill="#fff"/>
+            <rect x="12" y="14" width="4" height="12" rx="1" fill="#fff"/>
+            <rect x="18" y="10" width="4" height="16" rx="1" fill="#fff"/>
+            <rect x="24" y="6" width="4" height="20" rx="1" fill="#fff"/>
+          </svg>
+          Meadowview Community Solar Farm Project Dashboard
+          <span id="periodChip" class="period-chip"></span>
+        </h1>
+        <div class="btn-group" role="group" aria-label="Granularity">
+          <input type="radio" class="btn-check" name="granularity" id="granWeek" autocomplete="off" checked>
+          <label class="btn btn-outline-primary" for="granWeek"><i class="bi bi-calendar-week"></i> Weekly</label>
+          <input type="radio" class="btn-check" name="granularity" id="granMonth" autocomplete="off">
+          <label class="btn btn-outline-primary" for="granMonth"><i class="bi bi-calendar3"></i> Monthly</label>
+        </div>
+        <button id="printBtn" class="btn btn-outline-secondary"><i class="bi bi-printer"></i> Print</button>
+      </div>
+      <div class="mt-3 mb-3" id="timeline"></div>
+    </div>
+  </header>
+
+  <main class="container my-4">
+    <!-- View options -->
+    <div class="d-flex flex-wrap align-items-center gap-3 mb-3">
+      <span class="text-muted small fw-semibold">View:</span>
+      <div class="form-check form-switch mb-0">
+        <input class="form-check-input" type="checkbox" id="toggleEVM">
+        <label class="form-check-label small" for="toggleEVM">Earned value (SPI / CPI)</label>
+      </div>
+    </div>
+
+    <!-- Row 1: Executive Summary | Overall status | Budget + Schedule groups -->
+    <div class="row g-3">
+      <div class="col-12 col-xl-4">
+        <div class="card h-100">
+          <div class="card-header d-flex align-items-center justify-content-between bg-primary">
+            <span><i class="bi bi-chat-right-quote-fill"></i> Executive Summary</span>
+            <div class="small">Status in brief &bull; Decisions</div>
+          </div>
+          <div class="card-body" id="narrative"></div>
+        </div>
+      </div>
+      <div class="col-12 col-xl-2">
+        <div class="card h-100 shadow-sm">
+          <div class="card-body p-0 h-100" id="statusTile"></div>
+        </div>
+      </div>
+      <div class="col-12 col-xl-6">
+        <div class="metric-stack">
+          <!-- Budget group -->
+          <div class="row row-cols-1 row-cols-md-3 g-3" id="budgetTiles"></div>
+          <!-- Schedule group: health tile, progress chart, variance -->
+          <div class="row row-cols-1 row-cols-md-3 g-3" id="scheduleTiles"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Row 2: Deliverables Progress (wider) | key dates & phase -->
+    <div class="row g-3 mt-1">
+      <div class="col-12 col-lg-8">
+        <div class="card h-100">
+          <div class="card-header d-flex align-items-center justify-content-between bg-primary">
+            <span><i class="bi bi-bar-chart-fill"></i> Deliverables Progress</span>
+            <div class="small">Actual vs Planned</div>
+          </div>
+          <div class="card-body" id="activities"></div>
+        </div>
+      </div>
+      <div class="col-12 col-lg-4">
+        <div id="keyDates"></div>
+      </div>
+    </div>
+
+    <!-- Row 3: Highlights / Upcoming / Deliverables -->
+    <div class="row g-3 mt-1">
+      <div class="col-12 col-lg-4">
+        <div class="card h-100">
+          <div class="card-header d-flex align-items-center justify-content-between bg-primary">
+            <span><i class="bi bi-star-fill"></i> Key Highlights</span><div class="small">Top 5</div>
+          </div>
+          <div class="card-body" id="highlights"></div>
+        </div>
+      </div>
+      <div class="col-12 col-lg-4">
+        <div class="card h-100">
+          <div class="card-header d-flex align-items-center justify-content-between bg-primary">
+            <span><i class="bi bi-arrow-right-circle-fill"></i> Upcoming</span><div class="small">Next milestones</div>
+          </div>
+          <div class="card-body" id="upcoming"></div>
+        </div>
+      </div>
+      <div class="col-12 col-lg-4">
+        <div class="card h-100">
+          <div class="card-header d-flex align-items-center justify-content-between bg-primary">
+            <span><i class="bi bi-check2-square"></i> Deliverables</span><div class="small">Status</div>
+          </div>
+          <div class="card-body" id="deliverables"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Row 4: Progress photos -->
+    <div class="row g-3 mt-1">
+      <div class="col-12">
+        <div class="card h-100">
+          <div class="card-header d-flex align-items-center justify-content-between bg-primary">
+            <span><i class="bi bi-camera-fill"></i> Progress Photos</span>
+          </div>
+          <div class="card-body" id="photos"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Top risks -->
+    <div class="row g-3 mt-1">
+      <div class="col-12">
+        <div class="card h-100">
+          <div class="card-header d-flex align-items-center justify-content-between bg-primary">
+            <span><i class="bi bi-exclamation-triangle-fill"></i> Top Risks</span>
+          </div>
+          <div class="card-body">
+            <div class="table-responsive">
+              <table class="table table-sm align-middle mb-0 table-hover" id="issuesTable">
+                <thead class="table-light">
+                  <tr><th>Risk</th><th>Likelihood</th><th>Impact</th><th>Mitigation / Response</th><th>Status</th></tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Row 6: Earned Value module (optional, toggled) -->
+    <div id="evmModule" class="d-none">
+      <div class="row g-3 mt-1">
+        <div class="col-12">
+          <div class="card h-100">
+            <div class="card-header d-flex align-items-center justify-content-between bg-primary">
+              <span><i class="bi bi-graph-up-arrow"></i> Earned Value (SPI / CPI)</span>
+              <div class="small">For teams that run EVM</div>
+            </div>
+            <div class="card-body">
+              <div class="row g-3" id="evmKpis"></div>
+              <div class="text-center mt-3">
+                <img id="evChartImg" class="img-fluid rounded border" alt="Earned Value chart"/>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+
+    <div class="my-4 text-center text-muted small">
+      <p>Free to use, modify, and tailor to your projects.</p>
+      <p>If you'd like it tailored to your project (logo, fonts, data, and more), your progress reported using it, or project schedule and budget management, that's something I offer as a professional service. I'd be glad to hear from you. <br><b>Kwadwo Asiamah</b> (<a href="mailto:koasiamah@protonmail.com">koasiamah@protonmail.com</a>).</p>
+    </div>
+  </main>
+
+  <!-- Photo lightbox modal with carousel -->
+  <div class="modal fade" id="photoModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-body p-0">
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          <div id="photoCarousel" class="carousel slide" data-bs-interval="false">
+            <div class="carousel-inner"></div>
+            <button class="carousel-control-prev" type="button" data-bs-target="#photoCarousel" data-bs-slide="prev">
+              <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+              <span class="visually-hidden">Previous</span>
+            </button>
+            <button class="carousel-control-next" type="button" data-bs-target="#photoCarousel" data-bs-slide="next">
+              <span class="carousel-control-next-icon" aria-hidden="true"></span>
+              <span class="visually-hidden">Next</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bootstrap JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script>
+
+  <script>
+    /* =========================================================================
+       SAMPLE DATA — REPLACE FROM HERE
+       =========================================================================
+       Everything between this banner and "END OF SAMPLE DATA" is demo content for
+       a fictional project (the Meadowview Community Solar Farm). It exists only so
+       the dashboard has something to show on first open. Replace it with your own
+       and nothing else in the file needs to change.
+
+       Two things to fill in:
+
+         1. `sample.weeks` / `sample.months` — the period IDs you want in the
+            timeline, oldest first.
+            Leave `months` empty if you only report weekly, or vice versa.
+
+         2. `periodJSON` — one entry per ID listed above. Use
+            periodJSON-builder.html to generate these entries without hand-editing.
+            Each entry carries its own `projectEnd` (the agreed finish) alongside
+            `forecastFinish`, so a mid-project re-baseline only affects the periods
+            from that point on.
+
+       Two rules keep the dashboard internally consistent:
+         • spi must equal actualPct / plannedPct (the builder can calculate it).
+         • Weekly and monthly figures describe the same project, so a month-end
+           value should sit between the weekly values either side of it.
+
+       Photos and earned-value charts are looked up by period ID under
+       assets/photos/<period-id>/ and are optional.
+       ========================================================================= */
+    const sample = {
+      weeks:["2025-W49","2025-W50","2025-W51","2025-W52","2026-W01","2026-W02","2026-W03","2026-W04"],
+      months:["2025-10","2025-11","2025-12","2026-01","2026-02"],
+      periods: {}
+    };
+
+    const periodJSON = {
+      "2025-10": {
+        "narrative": {
+          "summary": "Project mobilised on site at the Meadowview Community Solar Farm. Access roads and laydown areas were established, topsoil stripping and grading of the array field commenced, and the main procurement packages (modules, inverters, mounting structures) were placed with suppliers.<br><br> Early progress tracked close to plan, with minor delays clearing vegetation in the south-east corner.",
+          "wins": [
+            "Site mobilisation and laydown areas completed.",
+            "Procurement packages for modules and inverters placed on schedule."
+          ],
+          "asks": [
+            "Confirm the utility interconnection study timeline to protect the commissioning window."
+          ],
+          "escalations": [
+            "None."
+          ]
+        },
+        "rag": "Green",
+        "projectEnd": "27 Feb 2026",
+        "forecastFinish": "27 Feb 2026",
+        "actualPct": 20,
+        "plannedPct": 21,
+        "activities": [
+          {
+            "name": "Site Preparation",
+            "actual": 100,
+            "planned": 100
+          },
+          {
+            "name": "Procurement & Delivery",
+            "actual": 48,
+            "planned": 52
+          },
+          {
+            "name": "Civil & Foundations",
+            "actual": 0,
+            "planned": 0
+          },
+          {
+            "name": "Panel Installation",
+            "actual": 0,
+            "planned": 0
+          },
+          {
+            "name": "Electrical, Testing & Commissioning",
+            "actual": 0,
+            "planned": 0
+          }
+        ],
+        "spi": 0.95,
+        "cpi": 1.0,
+        "risks": [
+          {
+            "risk": "Module and inverter delivery delays from suppliers",
+            "likelihood": "Medium",
+            "impact": "High",
+            "mitigation": "Place orders early with milestone tracking; secure alternative suppliers and expedited freight where needed.",
+            "status": "Open"
+          },
+          {
+            "risk": "Adverse winter weather disrupts civil and installation works",
+            "likelihood": "High",
+            "impact": "Medium",
+            "mitigation": "Maintain a weather-contingency plan with weekend-shift capacity; protect delivered materials and sequence weather-sensitive works.",
+            "status": "Open"
+          },
+          {
+            "risk": "Ground conditions worse than geotechnical survey",
+            "likelihood": "Medium",
+            "impact": "Medium",
+            "mitigation": "Validate piling rates early; keep a piling-rig contingency and adjust foundation design where ground conditions vary.",
+            "status": "Open"
+          },
+          {
+            "risk": "Utility grid interconnection approval delays commissioning",
+            "likelihood": "Medium",
+            "impact": "High",
+            "mitigation": "Engage the utility early; submit interconnection documentation ahead of need and confirm witness-test dates.",
+            "status": "Open"
+          },
+          {
+            "risk": "HSE incident during work at height or electrical works",
+            "likelihood": "Low",
+            "impact": "High",
+            "mitigation": "Enforce method statements and permits to work; ensure competent supervision and stop work if unsafe conditions arise.",
+            "status": "Open"
+          }
+        ]
+      },
+      "2025-11": {
+        "narrative": {
+          "summary": "Civil works advanced steadily. Cable trenching and the reinforced-concrete inverter pads were completed, and pile driving for the mounting structures reached roughly two-thirds of the array.<br><br> Ground conditions in the western section were firmer than the geotechnical survey indicated, which slightly improved pile-driving rates.",
+          "wins": [
+            "Inverter foundations completed.",
+            "Pile driving ahead of rate in the western array."
+          ],
+          "asks": [
+            "None."
+          ],
+          "escalations": [
+            "None."
+          ]
+        },
+        "rag": "Green",
+        "projectEnd": "27 Feb 2026",
+        "forecastFinish": "27 Feb 2026",
+        "actualPct": 43,
+        "plannedPct": 45,
+        "activities": [
+          {
+            "name": "Site Preparation",
+            "actual": 100,
+            "planned": 100
+          },
+          {
+            "name": "Procurement & Delivery",
+            "actual": 95,
+            "planned": 100
+          },
+          {
+            "name": "Civil & Foundations",
+            "actual": 52,
+            "planned": 53
+          },
+          {
+            "name": "Panel Installation",
+            "actual": 0,
+            "planned": 0
+          },
+          {
+            "name": "Electrical, Testing & Commissioning",
+            "actual": 0,
+            "planned": 0
+          }
+        ],
+        "spi": 0.96,
+        "cpi": 0.99,
+        "risks": [
+          {
+            "risk": "Module and inverter delivery delays from suppliers",
+            "likelihood": "Medium",
+            "impact": "High",
+            "mitigation": "Place orders early with milestone tracking; secure alternative suppliers and expedited freight where needed.",
+            "status": "Open"
+          },
+          {
+            "risk": "Adverse winter weather disrupts civil and installation works",
+            "likelihood": "High",
+            "impact": "Medium",
+            "mitigation": "Maintain a weather-contingency plan with weekend-shift capacity; protect delivered materials and sequence weather-sensitive works.",
+            "status": "Open"
+          },
+          {
+            "risk": "Ground conditions worse than geotechnical survey",
+            "likelihood": "Medium",
+            "impact": "Medium",
+            "mitigation": "Validate piling rates early; keep a piling-rig contingency and adjust foundation design where ground conditions vary.",
+            "status": "Open"
+          },
+          {
+            "risk": "Utility grid interconnection approval delays commissioning",
+            "likelihood": "Medium",
+            "impact": "High",
+            "mitigation": "Engage the utility early; submit interconnection documentation ahead of need and confirm witness-test dates.",
+            "status": "Open"
+          },
+          {
+            "risk": "HSE incident during work at height or electrical works",
+            "likelihood": "Low",
+            "impact": "High",
+            "mitigation": "Enforce method statements and permits to work; ensure competent supervision and stop work if unsafe conditions arise.",
+            "status": "Open"
+          }
+        ]
+      },
+      "2025-12": {
+        "narrative": {
+          "summary": "Progress slipped against plan this month following a severe storm front mid-month that halted outdoor works for several days and flooded part of the array field.<br><br> Despite the disruption, the first modules were delivered and panel installation began in the completed northern section. A recovery plan with additional weekend shifts was agreed to claw back the schedule.",
+          "wins": [
+            "First module delivery received and inspected.",
+            "Panel installation started in the northern array."
+          ],
+          "asks": [
+            "Approval for additional weekend shifts through January to recover the storm-related slip."
+          ],
+          "escalations": [
+            "Storm-related slip of approximately one week escalated to the steering group; recovery plan in place."
+          ]
+        },
+        "rag": "Amber",
+        "projectEnd": "27 Feb 2026",
+        "forecastFinish": "4 Mar 2026",
+        "actualPct": 62,
+        "plannedPct": 66,
+        "activities": [
+          {
+            "name": "Site Preparation",
+            "actual": 100,
+            "planned": 100
+          },
+          {
+            "name": "Procurement & Delivery",
+            "actual": 100,
+            "planned": 100
+          },
+          {
+            "name": "Civil & Foundations",
+            "actual": 100,
+            "planned": 100
+          },
+          {
+            "name": "Panel Installation",
+            "actual": 27,
+            "planned": 39
+          },
+          {
+            "name": "Electrical, Testing & Commissioning",
+            "actual": 0,
+            "planned": 0
+          }
+        ],
+        "spi": 0.94,
+        "cpi": 0.96,
+        "risks": [
+          {
+            "risk": "Module and inverter delivery delays from suppliers",
+            "likelihood": "Medium",
+            "impact": "High",
+            "mitigation": "Place orders early with milestone tracking; secure alternative suppliers and expedited freight where needed.",
+            "status": "Closed"
+          },
+          {
+            "risk": "Adverse winter weather disrupts civil and installation works",
+            "likelihood": "High",
+            "impact": "Medium",
+            "mitigation": "Maintain a weather-contingency plan with weekend-shift capacity; protect delivered materials and sequence weather-sensitive works.",
+            "status": "Open"
+          },
+          {
+            "risk": "Ground conditions worse than geotechnical survey",
+            "likelihood": "Medium",
+            "impact": "Medium",
+            "mitigation": "Validate piling rates early; keep a piling-rig contingency and adjust foundation design where ground conditions vary.",
+            "status": "Open"
+          },
+          {
+            "risk": "Utility grid interconnection approval delays commissioning",
+            "likelihood": "Medium",
+            "impact": "High",
+            "mitigation": "Engage the utility early; submit interconnection documentation ahead of need and confirm witness-test dates.",
+            "status": "Open"
+          },
+          {
+            "risk": "HSE incident during work at height or electrical works",
+            "likelihood": "Low",
+            "impact": "High",
+            "mitigation": "Enforce method statements and permits to work; ensure competent supervision and stop work if unsafe conditions arise.",
+            "status": "Open"
+          }
+        ]
+      },
+      "2026-01": {
+        "narrative": {
+          "summary": "Installation moved into full production. Mounting structures and modules were installed across the central and southern arrays, with DC stringing following closely behind.<br><br> The weekend-shift recovery plan brought progress back within tolerance of the baseline, recovering most of the storm-related slip.",
+          "wins": [
+            "Module installation passed three-quarters complete.",
+            "Most of the storm-related slip recovered through the shift plan."
+          ],
+          "asks": [
+            "Utility to confirm the witness-test date for grid connection."
+          ],
+          "escalations": [
+            "None."
+          ]
+        },
+        "rag": "Green",
+        "projectEnd": "27 Feb 2026",
+        "forecastFinish": "28 Feb 2026",
+        "actualPct": 81,
+        "plannedPct": 84,
+        "activities": [
+          {
+            "name": "Site Preparation",
+            "actual": 100,
+            "planned": 100
+          },
+          {
+            "name": "Procurement & Delivery",
+            "actual": 100,
+            "planned": 100
+          },
+          {
+            "name": "Civil & Foundations",
+            "actual": 100,
+            "planned": 100
+          },
+          {
+            "name": "Panel Installation",
+            "actual": 85,
+            "planned": 94
+          },
+          {
+            "name": "Electrical, Testing & Commissioning",
+            "actual": 0,
+            "planned": 0
+          }
+        ],
+        "spi": 0.96,
+        "cpi": 0.98,
+        "risks": [
+          {
+            "risk": "Module and inverter delivery delays from suppliers",
+            "likelihood": "Medium",
+            "impact": "High",
+            "mitigation": "Place orders early with milestone tracking; secure alternative suppliers and expedited freight where needed.",
+            "status": "Closed"
+          },
+          {
+            "risk": "Adverse winter weather disrupts civil and installation works",
+            "likelihood": "High",
+            "impact": "Medium",
+            "mitigation": "Maintain a weather-contingency plan with weekend-shift capacity; protect delivered materials and sequence weather-sensitive works.",
+            "status": "Open"
+          },
+          {
+            "risk": "Ground conditions worse than geotechnical survey",
+            "likelihood": "Medium",
+            "impact": "Medium",
+            "mitigation": "Validate piling rates early; keep a piling-rig contingency and adjust foundation design where ground conditions vary.",
+            "status": "Closed"
+          },
+          {
+            "risk": "Utility grid interconnection approval delays commissioning",
+            "likelihood": "Medium",
+            "impact": "High",
+            "mitigation": "Engage the utility early; submit interconnection documentation ahead of need and confirm witness-test dates.",
+            "status": "Open"
+          },
+          {
+            "risk": "HSE incident during work at height or electrical works",
+            "likelihood": "Low",
+            "impact": "High",
+            "mitigation": "Enforce method statements and permits to work; ensure competent supervision and stop work if unsafe conditions arise.",
+            "status": "Open"
+          }
+        ]
+      },
+      "2026-02": {
+        "narrative": {
+          "summary": "The project entered its final phase. Remaining modules were installed, DC and AC electrical works were completed, and the inverters and transformers were energised.<br><br> Grid connection was achieved and commissioning testing began, with the array exporting power during initial performance tests. Snagging and documentation are being finalised ahead of handover.",
+          "wins": [
+            "Grid connection achieved and first export recorded.",
+            "Commissioning tests underway with no major defects."
+          ],
+          "asks": [
+            "None."
+          ],
+          "escalations": [
+            "None."
+          ]
+        },
+        "rag": "Green",
+        "projectEnd": "27 Feb 2026",
+        "forecastFinish": "27 Feb 2026",
+        "actualPct": 96,
+        "plannedPct": 100,
+        "activities": [
+          {
+            "name": "Site Preparation",
+            "actual": 100,
+            "planned": 100
+          },
+          {
+            "name": "Procurement & Delivery",
+            "actual": 100,
+            "planned": 100
+          },
+          {
+            "name": "Civil & Foundations",
+            "actual": 100,
+            "planned": 100
+          },
+          {
+            "name": "Panel Installation",
+            "actual": 100,
+            "planned": 100
+          },
+          {
+            "name": "Electrical, Testing & Commissioning",
+            "actual": 80,
+            "planned": 100
+          }
+        ],
+        "spi": 0.96,
+        "cpi": 1.0,
+        "risks": [
+          {
+            "risk": "Module and inverter delivery delays from suppliers",
+            "likelihood": "Medium",
+            "impact": "High",
+            "mitigation": "Place orders early with milestone tracking; secure alternative suppliers and expedited freight where needed.",
+            "status": "Closed"
+          },
+          {
+            "risk": "Adverse winter weather disrupts civil and installation works",
+            "likelihood": "High",
+            "impact": "Medium",
+            "mitigation": "Maintain a weather-contingency plan with weekend-shift capacity; protect delivered materials and sequence weather-sensitive works.",
+            "status": "Closed"
+          },
+          {
+            "risk": "Ground conditions worse than geotechnical survey",
+            "likelihood": "Medium",
+            "impact": "Medium",
+            "mitigation": "Validate piling rates early; keep a piling-rig contingency and adjust foundation design where ground conditions vary.",
+            "status": "Closed"
+          },
+          {
+            "risk": "Utility grid interconnection approval delays commissioning",
+            "likelihood": "Medium",
+            "impact": "High",
+            "mitigation": "Engage the utility early; submit interconnection documentation ahead of need and confirm witness-test dates.",
+            "status": "Closed"
+          },
+          {
+            "risk": "HSE incident during work at height or electrical works",
+            "likelihood": "Low",
+            "impact": "High",
+            "mitigation": "Enforce method statements and permits to work; ensure competent supervision and stop work if unsafe conditions arise.",
+            "status": "Open"
+          }
+        ]
+      },
+      "2025-W49": {
+        "narrative": {
+          "summary": "Civil works neared completion and panel installation was being mobilised. Heavy rain earlier in the week softened ground in the southern section and slowed the final foundations, putting the week slightly behind plan.<br><br> Module deliveries for the next installation phase were confirmed for the following week.",
+          "wins": [
+            "Northern-array foundations completed and signed off."
+          ],
+          "asks": [
+            "None."
+          ],
+          "escalations": [
+            "None."
+          ]
+        },
+        "rag": "Amber",
+        "projectEnd": "27 Feb 2026",
+        "forecastFinish": "27 Feb 2026",
+        "actualPct": 47,
+        "plannedPct": 50,
+        "activities": [
+          {
+            "name": "Site Preparation",
+            "actual": 100,
+            "planned": 100
+          },
+          {
+            "name": "Procurement & Delivery",
+            "actual": 100,
+            "planned": 100
+          },
+          {
+            "name": "Civil & Foundations",
+            "actual": 64,
+            "planned": 71
+          },
+          {
+            "name": "Panel Installation",
+            "actual": 0,
+            "planned": 0
+          },
+          {
+            "name": "Electrical, Testing & Commissioning",
+            "actual": 0,
+            "planned": 0
+          }
+        ],
+        "spi": 0.94,
+        "cpi": 0.97,
+        "risks": [
+          {
+            "risk": "Module and inverter delivery delays from suppliers",
+            "likelihood": "Medium",
+            "impact": "High",
+            "mitigation": "Place orders early with milestone tracking; secure alternative suppliers and expedited freight where needed.",
+            "status": "Closed"
+          },
+          {
+            "risk": "Adverse winter weather disrupts civil and installation works",
+            "likelihood": "High",
+            "impact": "Medium",
+            "mitigation": "Maintain a weather-contingency plan with weekend-shift capacity; protect delivered materials and sequence weather-sensitive works.",
+            "status": "Open"
+          },
+          {
+            "risk": "Ground conditions worse than geotechnical survey",
+            "likelihood": "Medium",
+            "impact": "Medium",
+            "mitigation": "Validate piling rates early; keep a piling-rig contingency and adjust foundation design where ground conditions vary.",
+            "status": "Open"
+          },
+          {
+            "risk": "Utility grid interconnection approval delays commissioning",
+            "likelihood": "Medium",
+            "impact": "High",
+            "mitigation": "Engage the utility early; submit interconnection documentation ahead of need and confirm witness-test dates.",
+            "status": "Open"
+          },
+          {
+            "risk": "HSE incident during work at height or electrical works",
+            "likelihood": "Low",
+            "impact": "High",
+            "mitigation": "Enforce method statements and permits to work; ensure competent supervision and stop work if unsafe conditions arise.",
+            "status": "Open"
+          }
+        ]
+      },
+      "2025-W50": {
+        "narrative": {
+          "summary": "A severe storm front struck mid-week, halting all outdoor works for three days and flooding part of the array field. The week finished materially behind plan, and the schedule slipped by roughly one week.<br><br> Site teams focused on water clearance and protecting delivered materials; no safety incidents or equipment damage were recorded.",
+          "wins": [
+            "No HSE incidents or material damage during the storm."
+          ],
+          "asks": [
+            "Approval for weekend shifts to begin schedule recovery once the field dries."
+          ],
+          "escalations": [
+            "Storm-related slip escalated to the steering group; recovery plan being prepared."
+          ]
+        },
+        "rag": "Red",
+        "projectEnd": "27 Feb 2026",
+        "forecastFinish": "4 Mar 2026",
+        "actualPct": 49,
+        "plannedPct": 55,
+        "activities": [
+          {
+            "name": "Site Preparation",
+            "actual": 100,
+            "planned": 100
+          },
+          {
+            "name": "Procurement & Delivery",
+            "actual": 100,
+            "planned": 100
+          },
+          {
+            "name": "Civil & Foundations",
+            "actual": 69,
+            "planned": 83
+          },
+          {
+            "name": "Panel Installation",
+            "actual": 0,
+            "planned": 13
+          },
+          {
+            "name": "Electrical, Testing & Commissioning",
+            "actual": 0,
+            "planned": 0
+          }
+        ],
+        "spi": 0.89,
+        "cpi": 0.94,
+        "risks": [
+          {
+            "risk": "Module and inverter delivery delays from suppliers",
+            "likelihood": "Medium",
+            "impact": "High",
+            "mitigation": "Place orders early with milestone tracking; secure alternative suppliers and expedited freight where needed.",
+            "status": "Closed"
+          },
+          {
+            "risk": "Adverse winter weather disrupts civil and installation works",
+            "likelihood": "High",
+            "impact": "Medium",
+            "mitigation": "Maintain a weather-contingency plan with weekend-shift capacity; protect delivered materials and sequence weather-sensitive works.",
+            "status": "Open"
+          },
+          {
+            "risk": "Ground conditions worse than geotechnical survey",
+            "likelihood": "Medium",
+            "impact": "Medium",
+            "mitigation": "Validate piling rates early; keep a piling-rig contingency and adjust foundation design where ground conditions vary.",
+            "status": "Open"
+          },
+          {
+            "risk": "Utility grid interconnection approval delays commissioning",
+            "likelihood": "Medium",
+            "impact": "High",
+            "mitigation": "Engage the utility early; submit interconnection documentation ahead of need and confirm witness-test dates.",
+            "status": "Open"
+          },
+          {
+            "risk": "HSE incident during work at height or electrical works",
+            "likelihood": "Low",
+            "impact": "High",
+            "mitigation": "Enforce method statements and permits to work; ensure competent supervision and stop work if unsafe conditions arise.",
+            "status": "Open"
+          }
+        ]
+      },
+      "2025-W51": {
+        "narrative": {
+          "summary": "Works resumed mid-week once the field drained. Water was cleared, the remaining southern foundations were completed, and panel installation restarted in the northern array.<br><br> The agreed weekend-shift recovery plan began, and the week closed the gap to plan slightly.",
+          "wins": [
+            "Site dewatered and works resumed.",
+            "Recovery shift plan mobilised."
+          ],
+          "asks": [
+            "None."
+          ],
+          "escalations": [
+            "Recovery plan in progress; slip reducing."
+          ]
+        },
+        "rag": "Amber",
+        "projectEnd": "27 Feb 2026",
+        "forecastFinish": "4 Mar 2026",
+        "actualPct": 55,
+        "plannedPct": 60,
+        "activities": [
+          {
+            "name": "Site Preparation",
+            "actual": 100,
+            "planned": 100
+          },
+          {
+            "name": "Procurement & Delivery",
+            "actual": 100,
+            "planned": 100
+          },
+          {
+            "name": "Civil & Foundations",
+            "actual": 83,
+            "planned": 95
+          },
+          {
+            "name": "Panel Installation",
+            "actual": 13,
+            "planned": 26
+          },
+          {
+            "name": "Electrical, Testing & Commissioning",
+            "actual": 0,
+            "planned": 0
+          }
+        ],
+        "spi": 0.92,
+        "cpi": 0.95,
+        "risks": [
+          {
+            "risk": "Module and inverter delivery delays from suppliers",
+            "likelihood": "Medium",
+            "impact": "High",
+            "mitigation": "Place orders early with milestone tracking; secure alternative suppliers and expedited freight where needed.",
+            "status": "Closed"
+          },
+          {
+            "risk": "Adverse winter weather disrupts civil and installation works",
+            "likelihood": "High",
+            "impact": "Medium",
+            "mitigation": "Maintain a weather-contingency plan with weekend-shift capacity; protect delivered materials and sequence weather-sensitive works.",
+            "status": "Open"
+          },
+          {
+            "risk": "Ground conditions worse than geotechnical survey",
+            "likelihood": "Medium",
+            "impact": "Medium",
+            "mitigation": "Validate piling rates early; keep a piling-rig contingency and adjust foundation design where ground conditions vary.",
+            "status": "Open"
+          },
+          {
+            "risk": "Utility grid interconnection approval delays commissioning",
+            "likelihood": "Medium",
+            "impact": "High",
+            "mitigation": "Engage the utility early; submit interconnection documentation ahead of need and confirm witness-test dates.",
+            "status": "Open"
+          },
+          {
+            "risk": "HSE incident during work at height or electrical works",
+            "likelihood": "Low",
+            "impact": "High",
+            "mitigation": "Enforce method statements and permits to work; ensure competent supervision and stop work if unsafe conditions arise.",
+            "status": "Open"
+          }
+        ]
+      },
+      "2025-W52": {
+        "narrative": {
+          "summary": "A shortened holiday week with a reduced crew maintained steady installation in the northern and central arrays, holding close to the recovery curve.<br><br> Module deliveries for January were confirmed, securing the critical path into the new year.",
+          "wins": [
+            "Installation continued through the holiday period with a reduced crew.",
+            "January module deliveries confirmed."
+          ],
+          "asks": [
+            "None."
+          ],
+          "escalations": [
+            "None."
+          ]
+        },
+        "rag": "Green",
+        "projectEnd": "27 Feb 2026",
+        "forecastFinish": "28 Feb 2026",
+        "actualPct": 60,
+        "plannedPct": 64,
+        "activities": [
+          {
+            "name": "Site Preparation",
+            "actual": 100,
+            "planned": 100
+          },
+          {
+            "name": "Procurement & Delivery",
+            "actual": 100,
+            "planned": 100
+          },
+          {
+            "name": "Civil & Foundations",
+            "actual": 95,
+            "planned": 100
+          },
+          {
+            "name": "Panel Installation",
+            "actual": 26,
+            "planned": 37
+          },
+          {
+            "name": "Electrical, Testing & Commissioning",
+            "actual": 0,
+            "planned": 0
+          }
+        ],
+        "spi": 0.94,
+        "cpi": 0.97,
+        "risks": [
+          {
+            "risk": "Module and inverter delivery delays from suppliers",
+            "likelihood": "Medium",
+            "impact": "High",
+            "mitigation": "Place orders early with milestone tracking; secure alternative suppliers and expedited freight where needed.",
+            "status": "Closed"
+          },
+          {
+            "risk": "Adverse winter weather disrupts civil and installation works",
+            "likelihood": "High",
+            "impact": "Medium",
+            "mitigation": "Maintain a weather-contingency plan with weekend-shift capacity; protect delivered materials and sequence weather-sensitive works.",
+            "status": "Open"
+          },
+          {
+            "risk": "Ground conditions worse than geotechnical survey",
+            "likelihood": "Medium",
+            "impact": "Medium",
+            "mitigation": "Validate piling rates early; keep a piling-rig contingency and adjust foundation design where ground conditions vary.",
+            "status": "Open"
+          },
+          {
+            "risk": "Utility grid interconnection approval delays commissioning",
+            "likelihood": "Medium",
+            "impact": "High",
+            "mitigation": "Engage the utility early; submit interconnection documentation ahead of need and confirm witness-test dates.",
+            "status": "Open"
+          },
+          {
+            "risk": "HSE incident during work at height or electrical works",
+            "likelihood": "Low",
+            "impact": "High",
+            "mitigation": "Enforce method statements and permits to work; ensure competent supervision and stop work if unsafe conditions arise.",
+            "status": "Open"
+          }
+        ]
+      },
+      "2026-W01": {
+        "narrative": {
+          "summary": "Installation returned to full production with all crews back on site. Mounting structures and modules advanced across the central array, with DC stringing following closely behind.<br><br> The storm-related slip continued to narrow against the baseline.",
+          "wins": [
+            "All installation crews remobilised; production back to full rate."
+          ],
+          "asks": [
+            "Utility to confirm the grid witness-test date."
+          ],
+          "escalations": [
+            "None."
+          ]
+        },
+        "rag": "Green",
+        "projectEnd": "27 Feb 2026",
+        "forecastFinish": "28 Feb 2026",
+        "actualPct": 65,
+        "plannedPct": 68,
+        "activities": [
+          {
+            "name": "Site Preparation",
+            "actual": 100,
+            "planned": 100
+          },
+          {
+            "name": "Procurement & Delivery",
+            "actual": 100,
+            "planned": 100
+          },
+          {
+            "name": "Civil & Foundations",
+            "actual": 100,
+            "planned": 100
+          },
+          {
+            "name": "Panel Installation",
+            "actual": 39,
+            "planned": 47
+          },
+          {
+            "name": "Electrical, Testing & Commissioning",
+            "actual": 0,
+            "planned": 0
+          }
+        ],
+        "spi": 0.96,
+        "cpi": 0.98,
+        "risks": [
+          {
+            "risk": "Module and inverter delivery delays from suppliers",
+            "likelihood": "Medium",
+            "impact": "High",
+            "mitigation": "Place orders early with milestone tracking; secure alternative suppliers and expedited freight where needed.",
+            "status": "Closed"
+          },
+          {
+            "risk": "Adverse winter weather disrupts civil and installation works",
+            "likelihood": "High",
+            "impact": "Medium",
+            "mitigation": "Maintain a weather-contingency plan with weekend-shift capacity; protect delivered materials and sequence weather-sensitive works.",
+            "status": "Open"
+          },
+          {
+            "risk": "Ground conditions worse than geotechnical survey",
+            "likelihood": "Medium",
+            "impact": "Medium",
+            "mitigation": "Validate piling rates early; keep a piling-rig contingency and adjust foundation design where ground conditions vary.",
+            "status": "Closed"
+          },
+          {
+            "risk": "Utility grid interconnection approval delays commissioning",
+            "likelihood": "Medium",
+            "impact": "High",
+            "mitigation": "Engage the utility early; submit interconnection documentation ahead of need and confirm witness-test dates.",
+            "status": "Open"
+          },
+          {
+            "risk": "HSE incident during work at height or electrical works",
+            "likelihood": "Low",
+            "impact": "High",
+            "mitigation": "Enforce method statements and permits to work; ensure competent supervision and stop work if unsafe conditions arise.",
+            "status": "Open"
+          }
+        ]
+      },
+      "2026-W02": {
+        "narrative": {
+          "summary": "Module installation passed the three-quarter mark and DC works progressed into the southern array. Inverter and transformer installation began ahead of electrical termination.<br><br> Progress remained within tolerance of the baseline.",
+          "wins": [
+            "Module installation passed three-quarters complete.",
+            "Inverter and transformer installation started."
+          ],
+          "asks": [
+            "None."
+          ],
+          "escalations": [
+            "None."
+          ]
+        },
+        "rag": "Green",
+        "projectEnd": "27 Feb 2026",
+        "forecastFinish": "28 Feb 2026",
+        "actualPct": 70,
+        "plannedPct": 73,
+        "activities": [
+          {
+            "name": "Site Preparation",
+            "actual": 100,
+            "planned": 100
+          },
+          {
+            "name": "Procurement & Delivery",
+            "actual": 100,
+            "planned": 100
+          },
+          {
+            "name": "Civil & Foundations",
+            "actual": 100,
+            "planned": 100
+          },
+          {
+            "name": "Panel Installation",
+            "actual": 53,
+            "planned": 61
+          },
+          {
+            "name": "Electrical, Testing & Commissioning",
+            "actual": 0,
+            "planned": 0
+          }
+        ],
+        "spi": 0.96,
+        "cpi": 0.99,
+        "risks": [
+          {
+            "risk": "Module and inverter delivery delays from suppliers",
+            "likelihood": "Medium",
+            "impact": "High",
+            "mitigation": "Place orders early with milestone tracking; secure alternative suppliers and expedited freight where needed.",
+            "status": "Closed"
+          },
+          {
+            "risk": "Adverse winter weather disrupts civil and installation works",
+            "likelihood": "High",
+            "impact": "Medium",
+            "mitigation": "Maintain a weather-contingency plan with weekend-shift capacity; protect delivered materials and sequence weather-sensitive works.",
+            "status": "Open"
+          },
+          {
+            "risk": "Ground conditions worse than geotechnical survey",
+            "likelihood": "Medium",
+            "impact": "Medium",
+            "mitigation": "Validate piling rates early; keep a piling-rig contingency and adjust foundation design where ground conditions vary.",
+            "status": "Closed"
+          },
+          {
+            "risk": "Utility grid interconnection approval delays commissioning",
+            "likelihood": "Medium",
+            "impact": "High",
+            "mitigation": "Engage the utility early; submit interconnection documentation ahead of need and confirm witness-test dates.",
+            "status": "Open"
+          },
+          {
+            "risk": "HSE incident during work at height or electrical works",
+            "likelihood": "Low",
+            "impact": "High",
+            "mitigation": "Enforce method statements and permits to work; ensure competent supervision and stop work if unsafe conditions arise.",
+            "status": "Open"
+          }
+        ]
+      },
+      "2026-W03": {
+        "narrative": {
+          "summary": "Electrical works advanced with DC stringing completed across most arrays and AC cabling pulled to the inverter stations. The utility confirmed the grid witness-test date, removing a key uncertainty for commissioning.<br><br> Remaining works are concentrated in the south-east corner.",
+          "wins": [
+            "DC stringing largely complete.",
+            "Grid witness-test date confirmed by the utility."
+          ],
+          "asks": [
+            "None."
+          ],
+          "escalations": [
+            "None."
+          ]
+        },
+        "rag": "Green",
+        "projectEnd": "27 Feb 2026",
+        "forecastFinish": "27 Feb 2026",
+        "actualPct": 74,
+        "plannedPct": 77,
+        "activities": [
+          {
+            "name": "Site Preparation",
+            "actual": 100,
+            "planned": 100
+          },
+          {
+            "name": "Procurement & Delivery",
+            "actual": 100,
+            "planned": 100
+          },
+          {
+            "name": "Civil & Foundations",
+            "actual": 100,
+            "planned": 100
+          },
+          {
+            "name": "Panel Installation",
+            "actual": 63,
+            "planned": 71
+          },
+          {
+            "name": "Electrical, Testing & Commissioning",
+            "actual": 0,
+            "planned": 0
+          }
+        ],
+        "spi": 0.96,
+        "cpi": 0.99,
+        "risks": [
+          {
+            "risk": "Module and inverter delivery delays from suppliers",
+            "likelihood": "Medium",
+            "impact": "High",
+            "mitigation": "Place orders early with milestone tracking; secure alternative suppliers and expedited freight where needed.",
+            "status": "Closed"
+          },
+          {
+            "risk": "Adverse winter weather disrupts civil and installation works",
+            "likelihood": "High",
+            "impact": "Medium",
+            "mitigation": "Maintain a weather-contingency plan with weekend-shift capacity; protect delivered materials and sequence weather-sensitive works.",
+            "status": "Open"
+          },
+          {
+            "risk": "Ground conditions worse than geotechnical survey",
+            "likelihood": "Medium",
+            "impact": "Medium",
+            "mitigation": "Validate piling rates early; keep a piling-rig contingency and adjust foundation design where ground conditions vary.",
+            "status": "Closed"
+          },
+          {
+            "risk": "Utility grid interconnection approval delays commissioning",
+            "likelihood": "Medium",
+            "impact": "High",
+            "mitigation": "Engage the utility early; submit interconnection documentation ahead of need and confirm witness-test dates.",
+            "status": "Open"
+          },
+          {
+            "risk": "HSE incident during work at height or electrical works",
+            "likelihood": "Low",
+            "impact": "High",
+            "mitigation": "Enforce method statements and permits to work; ensure competent supervision and stop work if unsafe conditions arise.",
+            "status": "Open"
+          }
+        ]
+      },
+      "2026-W04": {
+        "narrative": {
+          "summary": "Installation neared completion and the focus shifted to electrical termination and pre-commissioning checks. Inverters were energised in the northern section for initial testing.<br><br> The project is positioned to begin grid connection and commissioning in the coming weeks, on track for the baseline finish.",
+          "wins": [
+            "Inverters energised in the northern array for initial testing.",
+            "Pre-commissioning checks commenced."
+          ],
+          "asks": [
+            "None."
+          ],
+          "escalations": [
+            "None."
+          ]
+        },
+        "rag": "Green",
+        "projectEnd": "27 Feb 2026",
+        "forecastFinish": "27 Feb 2026",
+        "actualPct": 79,
+        "plannedPct": 82,
+        "activities": [
+          {
+            "name": "Site Preparation",
+            "actual": 100,
+            "planned": 100
+          },
+          {
+            "name": "Procurement & Delivery",
+            "actual": 100,
+            "planned": 100
+          },
+          {
+            "name": "Civil & Foundations",
+            "actual": 100,
+            "planned": 100
+          },
+          {
+            "name": "Panel Installation",
+            "actual": 76,
+            "planned": 84
+          },
+          {
+            "name": "Electrical, Testing & Commissioning",
+            "actual": 0,
+            "planned": 10
+          }
+        ],
+        "spi": 0.96,
+        "cpi": 1.0,
+        "risks": [
+          {
+            "risk": "Module and inverter delivery delays from suppliers",
+            "likelihood": "Medium",
+            "impact": "High",
+            "mitigation": "Place orders early with milestone tracking; secure alternative suppliers and expedited freight where needed.",
+            "status": "Closed"
+          },
+          {
+            "risk": "Adverse winter weather disrupts civil and installation works",
+            "likelihood": "High",
+            "impact": "Medium",
+            "mitigation": "Maintain a weather-contingency plan with weekend-shift capacity; protect delivered materials and sequence weather-sensitive works.",
+            "status": "Open"
+          },
+          {
+            "risk": "Ground conditions worse than geotechnical survey",
+            "likelihood": "Medium",
+            "impact": "Medium",
+            "mitigation": "Validate piling rates early; keep a piling-rig contingency and adjust foundation design where ground conditions vary.",
+            "status": "Closed"
+          },
+          {
+            "risk": "Utility grid interconnection approval delays commissioning",
+            "likelihood": "Medium",
+            "impact": "High",
+            "mitigation": "Engage the utility early; submit interconnection documentation ahead of need and confirm witness-test dates.",
+            "status": "Open"
+          },
+          {
+            "risk": "HSE incident during work at height or electrical works",
+            "likelihood": "Low",
+            "impact": "High",
+            "mitigation": "Enforce method statements and permits to work; ensure competent supervision and stop work if unsafe conditions arise.",
+            "status": "Open"
+          }
+        ]
+      }
+    };
+    /* =========================================================================
+       END OF SAMPLE DATA — the code below is generic and needs no editing
+       ========================================================================= */
+
+    // Build sample periods
+    sample.weeks.forEach(id => sample.periods[id] = makePeriod(id, periodJSON[id]));
+    sample.months.forEach(id => sample.periods[id] = makePeriod(id, periodJSON[id]));
+
+    // Normalises a raw periodJSON entry into the shape the renderers expect.
+    // Variance is derived here rather than stored, so it can never drift from
+    // the actual and planned figures it is calculated from.
+    function makePeriod(id, periodJSONID){
+      const narrative = periodJSONID.narrative;
+      const rag = periodJSONID.rag;
+      const forecastFinish = periodJSONID.forecastFinish;
+      // Baseline finish for this period. Falls back to the forecast if omitted,
+      // so older period entries without projectEnd still render.
+      const projectEnd = periodJSONID.projectEnd || forecastFinish;
+      const risks = periodJSONID.risks;
+      const activities = periodJSONID.activities;
+      const spi = periodJSONID.spi;
+      const cpi = periodJSONID.cpi;
+      return {
+        period_id:id,
+        rag,
+        projectEnd,
+        forecastFinish,
+        kpis:{
+          percent_complete:periodJSONID.actualPct,
+          planned_percent_complete:periodJSONID.plannedPct,
+          variance:(periodJSONID.actualPct - periodJSONID.plannedPct),
+          spi, cpi
+        },
+        activities,
+        rid:{ risks },
+        narrative
+      }
+    }
+
+    // ---------- STATE ----------
+    const state = { granularity:'week', selected: null };
+
+    function initFromHash(){
+      // If hash present, honor it; else default to latest of current granularity
+      const h = decodeURIComponent(location.hash.replace('#',''));
+      if(h){
+        const [gran, id] = h.split('|');
+        if(gran && (gran==='week'||gran==='month')) state.granularity = gran;
+        const ticks = (state.granularity==='week') ? sample.weeks : sample.months;
+        if(id && ticks.includes(id)) state.selected = id;
+      }
+      if(!state.selected){
+        // default latest for current granularity
+        state.selected = (state.granularity==='week') ? sample.weeks[sample.weeks.length-1] : sample.months[sample.months.length-1];
+      }
+    }
+    function updateHash(){ history.replaceState(null,'', `#${state.granularity}|${state.selected}`); }
+
+    // ---------- RENDERERS ----------
+    function renderControls(){
+      document.getElementById('granWeek').checked = state.granularity==='week';
+      document.getElementById('granMonth').checked = state.granularity==='month';
+
+      const ticks = state.granularity==='week' ? sample.weeks : sample.months;
+      // normalize selection to latest available in this granularity
+      if(!ticks.includes(state.selected)) state.selected = ticks[ticks.length-1];
+      // Update period chip AFTER selection normalization
+      document.getElementById('periodChip').textContent = state.selected;
+
+      const wrap = document.createElement('div');
+      wrap.className = 'ticks d-flex justify-content-between align-items-center px-3';
+      ticks.forEach(t=>{
+        const cell = document.createElement('div');
+        cell.className = 'd-flex flex-column align-items-center';
+        const btn = document.createElement('button');
+        btn.className = 'tick-btn ' + (t===state.selected ? 'active' : '');
+        btn.setAttribute('aria-label', t);
+        btn.addEventListener('click', ()=>{ state.selected=t; renderAll(); });
+        cell.appendChild(btn);
+        const label = document.createElement('div'); label.className='tick-label'; label.textContent=t.replace(/^\d{4}[-.]/,'');
+        cell.appendChild(label);
+        wrap.appendChild(cell);
+      });
+      const container = document.getElementById('timeline');
+      container.innerHTML=''; container.appendChild(wrap);
+    }
+
+    // Renders an SPI/CPI tile. `bands` lets each index keep its own thresholds:
+    // schedule allows a 5% tolerance (SPI_BANDS), cost is held to a tighter line.
+    function makeMetricTile(label, value, toolTip, bands){
+      const b = bands || { green: 1, amber: 0.95 };
+      const bg = value>=b.green ? 'bg-success' : (value>=b.amber ? 'bg-warning' : 'bg-danger');
+      const style = value>=b.green ? 'color: #fff' : (value>=b.amber ? 'color: #1f2937' : 'color: #fff');
+      const col = document.createElement('div'); col.className='col-12 col-sm-6';
+      const card = document.createElement('div'); card.className='card h-100 shadow-sm';
+      const body = document.createElement('div'); body.className='card-body p-0';
+      body.innerHTML = `<div class="metric-tile ${bg} text-center" title="${attr(label + ': ' + value.toFixed(2) + ' — ' + toolTip)}" data-bs-toggle="tooltip" style="${style}">
+        <div class="metric-label mb-1">${label}</div>
+        <div class="metric-big">${value.toFixed(2)}</div>
+      </div>`;
+      card.appendChild(body); col.appendChild(card); return col;
+    }
+
+    function renderEV(){
+      const a = sample.periods[state.selected];
+      const periodId = state.selected;
+      const base = `assets/photos/${periodId}/earned-value.jpg`;
+      const img = document.getElementById('evChartImg');
+      img.style.display = '';
+      img.onerror = ()=>{ img.style.display = 'none'; };
+      img.src = base;
+    }
+
+    function renderActivities(){
+      const a = sample.periods[state.selected];
+      const root = document.getElementById('activities');
+      root.innerHTML=`<div class="d-flex align-items-center gap-3 mb-3">
+        <span><span class="legend-dot" style="background-color:#0d6efd"></span>Actual</span>
+        <span><span class="legend-dot" style="background-color:#22c55e"></span>Planned</span>
+      </div>`;
+      a.activities.forEach(act=>{
+        const row = document.createElement('div'); row.className='act-row';
+        const name = document.createElement('div'); name.className='act-name'; name.textContent=act.name; row.appendChild(name);
+        const bars = document.createElement('div'); bars.className='act-bars';
+        const bActual = document.createElement('div'); bActual.className='bar actual'; bActual.title = `Actual: ${act.actual}%`; bActual.setAttribute("data-bs-toggle", "tooltip");
+        bActual.innerHTML = `<span style="width:${act.actual}%"></span><div class='pct'>${act.actual}%</div>`;
+        const bPlanned = document.createElement('div'); bPlanned.className='bar planned'; bPlanned.title = `Planned: ${act.planned}%`; bPlanned.setAttribute("data-bs-toggle", "tooltip");
+        bPlanned.innerHTML = `<span style="width:${act.planned}%"></span><div class='pct'>${act.planned}%</div>`;
+        bars.appendChild(bActual); bars.appendChild(bPlanned); row.appendChild(bars); root.appendChild(row);
+      });
+    }
+
+    // Photos: local /assets/photos/<period>/1..24.(jpg|jpeg|png|webp)
+    let photosReady = Promise.resolve(); // resolves when this period's scan is done
+
+    function renderPhotos(){
+      const periodId = state.selected;
+      const root = document.getElementById('photos');
+      root.innerHTML='';
+      const base = `assets/photos/${periodId}/`;
+      const MAX = 24;
+      const EXTS = ['jpg','jpeg','png','webp'];
+      const loadedSrcs = [];
+
+      // Each thumbnail slot resolves either by loading or by being removed, so the
+      // grid is only finalised once every slot has reported back.
+      let remaining = MAX;
+      let resolveReady;
+      photosReady = new Promise(res => (resolveReady = res));
+
+      const extractNum = (src) => {
+        // assets/photos/<period>/12.jpg  OR  file:///.../12.jpg
+        const m = String(src).match(/\/(\d+)\.(jpg|jpeg|png|webp)(?:\?.*)?$/i);
+        return m ? parseInt(m[1], 10) : Number.MAX_SAFE_INTEGER;
+      };
+
+      const finalizeSlot = () => {
+        remaining--;
+        if (remaining === 0) {
+          // stable order: 1,2,3... (not load-order)
+          loadedSrcs.sort((a,b)=> extractNum(a) - extractNum(b));
+          resolveReady();
+        }
+      };
+
+      const row = document.createElement('div');
+      row.className = 'row row-cols-2 row-cols-md-3 row-cols-lg-4 g-2 photo-grid';
+
+      for(let i=1;i<=MAX;i++){
+        const col = document.createElement('div'); col.className='col';
+        const link = document.createElement('a');
+        link.href='#';
+
+        const img = document.createElement('img');
+        img.className='img-fluid rounded border photo-thumb';
+        img.alt = `Progress photo ${i}`;
+
+        const srcs = EXTS.map(ext => `${base}${i}.${ext}`);
+        img.dataset.srcIndex = 0;
+
+        const trySet = ()=> {
+          const idx = +img.dataset.srcIndex;
+          if(idx < srcs.length) img.src = srcs[idx];
+        };
+
+        img.onerror = ()=> {
+          let idx = +img.dataset.srcIndex;
+          img.dataset.srcIndex = ++idx;
+          if(idx < srcs.length){
+            img.src = srcs[idx];
+          } else {
+            col.remove();
+            checkEmpty();
+            finalizeSlot(); // image missing — slot resolved
+          }
+        };
+
+        img.onload = ()=> {
+          const finalSrc = img.currentSrc || img.src;
+          img.dataset.finalSrc = finalSrc;
+          if(!loadedSrcs.includes(finalSrc)) loadedSrcs.push(finalSrc);
+
+          finalizeSlot(); // image loaded — slot resolved
+
+          // IMPORTANT: open modal + build carousel only after gallery has settled
+          link.addEventListener('click', async (e)=>{
+            e.preventDefault();
+            e.stopImmediatePropagation();
+
+            // show modal immediately with a tiny loading placeholder
+            const modalEl = document.getElementById('photoModal');
+            const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+            const inner = document.querySelector('#photoCarousel .carousel-inner');
+            inner.innerHTML = `
+              <div class="carousel-item active">
+                <div class="d-flex align-items-center justify-content-center" style="height:55vh;">
+                  <div class="text-center text-muted">
+                    <div class="spinner-border" role="status"></div>
+                    <div class="mt-2">Loading photos…</div>
+                  </div>
+                </div>
+              </div>`;
+            modal.show();
+
+            await photosReady;
+
+            const list = loadedSrcs.slice(); // final, sorted
+            const start = Math.max(0, list.indexOf(img.dataset.finalSrc || img.src));
+            buildCarousel(list, start);
+          }, { capture:true });
+        };
+
+        trySet();
+        link.appendChild(img);
+        col.appendChild(link);
+        row.appendChild(col);
+      }
+
+      root.appendChild(row);
+
+      function checkEmpty(){
+        if(!root.querySelector('img')){
+          root.innerHTML = '<div class="empty-state">No photos for this period.</div>';
+        }
+      }
+    }
+
+    function buildCarousel(arr, startIndex=0){
+      const el = document.getElementById('photoCarousel');
+      const inner = el.querySelector('.carousel-inner');
+
+      const list = Array.isArray(arr) ? arr.slice() : [];
+      startIndex = Math.max(0, Math.min(startIndex, list.length - 1));
+
+      // Dispose the existing instance so Bootstrap doesn't keep a stale item count
+      const existing = bootstrap.Carousel.getInstance(el);
+      if(existing) existing.dispose();
+
+      inner.innerHTML='';
+      list.forEach((src,i)=>{
+        const item = document.createElement('div');
+        item.className = 'carousel-item' + (i===startIndex ? ' active' : '');
+        item.innerHTML = `<img src="${src}" class="d-block w-100" alt="Photo ${i+1}">`;
+        inner.appendChild(item);
+      });
+
+      const car = new bootstrap.Carousel(el, { interval:false });
+      car.to(startIndex);
+    }
+
+    function renderRisks(){
+      const a = sample.periods[state.selected];
+      const tbody = document.querySelector('#issuesTable tbody');
+      tbody.innerHTML='';
+      a.rid.risks.forEach(r=>{
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${r.risk}</td><td>${r.likelihood}</td><td>${r.impact}</td><td>${r.mitigation}</td>
+                        <td><span class='badge ${r.status==='Open'?'text-bg-danger':r.status==='Closed'?'text-bg-success':'text-bg-info'}'>${r.status}</span></td>`;
+        tbody.appendChild(tr);
+      });
+    }
+
+    // ---------- Executive derivations ----------
+    // Project-level facts that do not change from period to period.
+    // The project END date is NOT here: a schedule can be re-baselined mid-project,
+    // so each period carries its own `projectEnd` in periodJSON.
+    const PROJECT = { start:'6 Oct 2025', startISO:'2025-10-06', approved:3200000 };
+
+    // Phases and deliverables are both derived from a single number — the period's
+    // percent complete — so the Current phase, Deliverables and Upcoming cards stay
+    // in step automatically. See README.md for how to adapt them to your own project.
+    const PHASES = [
+      {name:'Site Preparation', t:0},
+      {name:'Procurement & Delivery', t:10},
+      {name:'Civil & Foundations', t:25},
+      {name:'Panel Installation', t:45},
+      {name:'Electrical & Commissioning', t:82}
+    ];
+    
+    const DELIVERABLES = [
+      {name:'Site preparation & access', start:0, done:10},
+      {name:'Modules, inverters & structures procured', start:5, done:40},
+      {name:'Civil works & foundations', start:20, done:62},
+      {name:'PV array installation', start:45, done:88},
+      {name:'Grid connection & commissioning', start:80, done:100}
+    ];
+    
+    
+    function money(n){ n=Math.round(n); const s=n<0?'-':''; n=Math.abs(n); if(n>=1e6) return s+'$'+(n/1e6).toFixed(1)+'M'; if(n>=1e3) return s+'$'+Math.round(n/1e3)+'k'; return s+'$'+n; }
+    
+    // CPI = Earned Value / Actual Cost, so Actual Cost = Earned Value / CPI.
+    function spentToDate(a){ return a.kpis.percent_complete/100 * PROJECT.approved / a.kpis.cpi; }
+    
+    // Schedule tolerance bands. SPI is Earned Value / Planned Value, which with
+    // percent-complete figures is simply actualPct / plannedPct. A project within 5%
+    // of plan still counts as On track; more than 10% behind is Behind.
+    // Change these two numbers to re-tune every schedule colour on the page.
+    const SPI_BANDS = { green: 0.95, amber: 0.90 };
+
+    // Single source of truth for schedule colour. The Schedule tile, the % Variance
+    // tile and the SPI tile all call this, so the same SPI can never show two colours.
+    function spiBand(spi){
+      if(spi >= SPI_BANDS.green) return {cls:'bg-success', color:'#fff'};
+      if(spi >= SPI_BANDS.amber) return {cls:'bg-warning', color:'#1f2937'};
+      return {cls:'bg-danger', color:'#fff'};
+    }
+
+    // Fixed band-labels rather than a computed sentence, so identical wording always
+    // carries identical colour across every reporting period.
+    function scheduleHealth(a){
+      const spi = a.kpis.spi;
+      const label = spi >= SPI_BANDS.green ? 'On track'
+                  : spi >= SPI_BANDS.amber ? 'Slightly behind'
+                  : 'Behind';
+      return Object.assign({text: label}, spiBand(spi));
+    }
+    
+    function budgetHealth(a){
+      // colour matches the CPI tile bands: >=1 green, >=0.95 amber, else red
+      const cpi = a.kpis.cpi;
+      const over = Math.round((1/cpi - 1) * 100);
+      const cls = cpi>=1 ? 'bg-success' : (cpi>=0.95 ? 'bg-warning' : 'bg-danger');
+      const color = cpi>=1 ? '#fff' : (cpi>=0.95 ? '#1f2937' : '#fff');
+      const text = cpi>=1 ? (over<0 ? Math.abs(over)+'% under' : 'On budget') : Math.max(1,over)+'% over';
+      return {text, cls, color};
+    }
+    
+    // Each PHASES entry records the % complete at which that phase *starts*; a phase
+    // ends where the next one begins. Walking the list and keeping the last threshold
+    // passed therefore returns the phase the project is currently in.
+    function currentPhase(a){
+      const p = a.kpis.percent_complete; let idx=0;
+      for(let i=0;i<PHASES.length;i++){ if(p >= PHASES[i].t) idx=i; }
+      return {name:PHASES[idx].name, index:idx+1, total:PHASES.length};
+    }
+    
+    // Each deliverable owns a window on the same 0-100 scale (`start` to `done`).
+    // Windows may overlap, which is how parallel workstreams appear. `done` is tested
+    // first because a finished item also satisfies the `start` test.
+    function deliverablesFor(a){
+      const p = a.kpis.percent_complete;
+      return DELIVERABLES.map(d=>({name:d.name, status: p>=d.done?'Done':(p>d.start?'In progress':'Planned')}));
+    }
+    
+    // "Upcoming" needs no data of its own: it is the next few deliverables not yet Done.
+    function upcomingFor(a){
+      const rem = deliverablesFor(a).filter(d=>d.status!=='Done').slice(0,4)
+        .map(d=> d.name);
+      return rem.length ? rem : ['Final handover & close-out'];
+    }
+    
+    // Escapes a string for safe use inside an HTML attribute.
+    function attr(s){
+      return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;')
+                      .replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    // Every tile's tooltip repeats the label AND its value ("Overall status: Green"),
+    // so a truncated or glanced-at tile still reads in full on hover.
+    // `full` overrides the tooltip value when the tile shows a shortened version.
+    function tipFor(label, value, full){
+      return attr(label + ': ' + (full !== undefined ? full : value));
+    }
+
+    function tileHTML(cls, style, label, value, full){
+      return '<div class="col"><div class="card h-100 shadow-sm"><div class="card-body p-0 h-100">'
+        + '<div class="metric-tile '+cls+' h-100" title="'+tipFor(label,value,full)+'" data-bs-toggle="tooltip" style="'+style+'">'
+        + '<div class="metric-label mb-1">'+label+'</div><div class="metric-big">'+value+'</div>'
+        + '</div></div></div></div>';
+    }
+    
+    // Bare tile that fills whatever card it is dropped into (no wrapper markup).
+    function plainTile(cls, style, label, value, full){
+      return '<div class="metric-tile '+cls+' h-100" title="'+tipFor(label,value,full)+'" data-bs-toggle="tooltip" style="'+style+'">'
+        + '<div class="metric-label mb-1">'+label+'</div><div class="metric-big">'+value+'</div></div>';
+    }
+    function gridTile(cls, style, label, value, full){
+      // A tile can opt into clamping its value by including 'clamp-value' in cls.
+      const big = cls.indexOf('clamp-value') > -1 ? 'metric-big metric-clamp' : 'metric-big';
+      return '<div class="card h-100 shadow-sm"><div class="card-body p-0 h-100">'
+        + '<div class="metric-tile '+cls+' h-100" title="'+tipFor(label,value,full)+'" data-bs-toggle="tooltip" style="'+style+'">'
+        + '<div class="metric-label mb-1">'+label+'</div><div class="'+big+'">'+value+'</div>'
+        + '</div></div></div>';
+    }
+    
+    function ragTile(a, builder){
+      const cls = a.rag==='Red'?'bg-danger':a.rag==='Amber'?'bg-warning':a.rag==='Green'?'bg-success':'bg-secondary';
+      const color = a.rag==='Amber'?'#1f2937':'#fff';
+      return builder(cls, 'color:'+color, 'Overall status', a.rag);
+    }
+    
+    // Overall status sits alone in its own column so the RAG call is the first
+    // thing the eye lands on after the summary.
+    function renderStatusTile(){
+      const a = sample.periods[state.selected];
+      document.getElementById('statusTile').innerHTML = ragTile(a, plainTile);
+    }
+
+    // Key dates and current phase, as a 2x2 grid beside Deliverables Progress.
+    function renderKeyDates(){
+      const a = sample.periods[state.selected];
+      const ph = currentPhase(a);
+      document.getElementById('keyDates').innerHTML =
+          gridTile('tile-neutral','', 'Project start', PROJECT.start)
+        + gridTile('tile-neutral','', 'Project end', a.projectEnd)
+        + gridTile('tile-neutral','', 'Forecast finish', a.forecastFinish)
+        + gridTile('tile-neutral clamp-value','', 'Current phase',
+                   ph.name + ' (' + ph.index + '/' + ph.total + ')');
+    }
+    
+    function renderBudgetRow(){
+      const a = sample.periods[state.selected];
+      const bud = budgetHealth(a);
+      document.getElementById('budgetTiles').innerHTML =
+          tileHTML(bud.cls, 'color:'+bud.color, 'Budget', bud.text)
+        + tileHTML('tile-neutral','', 'Approved budget', money(PROJECT.approved))
+        + tileHTML('tile-neutral','', 'Spent to date', money(spentToDate(a)));
+    }
+    
+    function renderScheduleRow(){
+      const a = sample.periods[state.selected];
+      const sch = scheduleHealth(a);
+      const v = a.kpis.variance;
+      const vLabel = (v>=0?'+':'') + v + '%';
+      // Variance is a schedule measure, so it takes its colour from the SPI bands
+      // rather than from the sign of the number.
+      const varBand = spiBand(a.kpis.spi);
+
+      document.getElementById('scheduleTiles').innerHTML =
+          tileHTML(sch.cls, 'color:'+sch.color, 'Schedule', sch.text)
+        + progressChartCard(a)
+        + tileHTML(varBand.cls, 'color:'+varBand.color, 'Schedule Variance', vLabel);
+    }
+
+    // Overall progress as two stacked bars — Actual above Planned — using the same
+    // visual language as Deliverables Progress, with the figures repeated beneath.
+    function progressChartCard(a){
+      const act = a.kpis.percent_complete;
+      const pln = a.kpis.planned_percent_complete;
+      const bar = (cls, val, label) =>
+        '<div class="bar '+cls+'" title="'+label+': '+val+'%" data-bs-toggle="tooltip">'
+        + '<span style="width:'+val+'%"></span><div class="pct">'+val+'%</div></div>';
+      return '<div class="col"><div class="card h-100 shadow-sm"><div class="card-body p-2 d-flex flex-column justify-content-center">'
+        + '<div class="progress-bars">'
+        +   bar('actual', act, '% Complete')
+        +   bar('planned', pln, 'Planned % Complete')
+        + '</div>'
+        + '<div class="progress-figures">'
+        +   '<div><span class="legend-dot" style="background-color:#0d6efd"></span>% Complete <b>'+act+'%</b></div>'
+        +   '<div><span class="legend-dot" style="background-color:#22c55e"></span>Planned <b>'+pln+'%</b></div>'
+        + '</div>'
+        + '</div></div></div>';
+    }
+    
+    function listCard(elId, items, emptyText){
+      const el = document.getElementById(elId);
+      el.innerHTML = (items && items.length)
+        ? '<ul class="mb-0 small ps-3">'+items.map(x=>'<li class="mb-1">'+x+'</li>').join('')+'</ul>'
+        : '<div class="empty-state small">'+emptyText+'</div>';
+    }
+    
+    function renderHighlights(){ const a=sample.periods[state.selected]; listCard('highlights', (a.narrative.wins||[]).slice(0,5), 'No highlights this period.'); }
+    
+    function renderUpcoming(){ const a=sample.periods[state.selected]; listCard('upcoming', upcomingFor(a), '\u2014'); }
+    
+    function renderDeliverables(){
+      const a=sample.periods[state.selected];
+      document.getElementById('deliverables').innerHTML = deliverablesFor(a).map(d=>{
+        const badge = d.status==='Done'?'text-bg-success':(d.status==='In progress'?'text-bg-primary':'text-bg-secondary');
+        return '<div class="d-flex justify-content-between align-items-center small mb-2"><span>'+d.name+'</span><span class="badge '+badge+'">'+d.status+'</span></div>';
+      }).join('');
+    }
+    
+    function renderEVM(){
+      const a = sample.periods[state.selected];
+      const row = document.getElementById('evmKpis'); row.innerHTML='';
+      row.appendChild(makeMetricTile('SPI', a.kpis.spi, '> 1.0 ahead of schedule; = 1.0 on schedule; < 1.0 behind schedule', SPI_BANDS));
+      row.appendChild(makeMetricTile('CPI', a.kpis.cpi, '> 1.0 under budget; = 1.0 on budget; < 1.0 over budget'));
+      renderEV();
+    }
+    
+    
+    function renderNarrative(){
+      const n = sample.periods[state.selected].narrative;
+      const root = document.getElementById('narrative');
+      root.innerHTML = '<p class="mb-2">'+n.summary+'</p>';
+      const asks = (n.asks||[]).filter(x=>x && !/^none/i.test(x));
+      const esc  = (n.escalations||[]).filter(x=>x && !/^none/i.test(x));
+      if(asks.length) root.insertAdjacentHTML('beforeend', `<div class="mt-2 small"><span class="badge text-bg-primary">Decisions needed</span> <ul class="mb-0 mt-1">${asks.map(x=>`<li>${x}</li>`).join('')}</ul></div>`);
+      if(esc.length)  root.insertAdjacentHTML('beforeend', `<div class="mt-2 small"><span class="badge text-bg-warning text-dark">Escalations</span> <ul class="mb-0 mt-1">${esc.map(x=>`<li>${x}</li>`).join('')}</ul></div>`);
+    }
+
+    function renderAll(){
+      updateHash();
+      renderControls();
+      renderStatusTile();
+      renderKeyDates();
+      renderBudgetRow();
+      renderScheduleRow();
+      renderNarrative();
+      renderHighlights();
+      renderUpcoming();
+      renderDeliverables();
+      renderActivities();
+      renderRisks();
+      renderEVM();
+      renderPhotos();
+
+      var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+      var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl)
+      });
+
+      const buttonElement = document.querySelector('.btn-close');
+      buttonElement.onclick = function(){      
+        if (buttonElement) {
+          buttonElement.blur();
+        }
+        document.getElementById('photoModal').setAttribute('aria-hidden', 'true');
+      };
+    }
+
+    // ---------- Events ----------
+    function wireEvents(){
+      document.getElementById('granWeek').addEventListener('change', ()=>{ state.granularity='week'; state.selected = sample.weeks[sample.weeks.length-1]; renderAll(); });
+      document.getElementById('granMonth').addEventListener('change', ()=>{ state.granularity='month'; state.selected = sample.months[sample.months.length-1]; renderAll(); });
+      document.getElementById('printBtn').addEventListener('click', ()=> window.print());
+      window.addEventListener('hashchange', ()=>{ initFromHash(); renderAll(); });
+      document.getElementById('toggleEVM').addEventListener('change', e=>{ document.getElementById('evmModule').classList.toggle('d-none', !e.target.checked); });
+    }
+
+    // ---------- Init ----------
+    initFromHash();
+    wireEvents();
+    if(!sample.months.length){ document.getElementById('granMonth').disabled = true; }
+    renderAll();
+  </script>
+</body>
+</html>
