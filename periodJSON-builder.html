@@ -157,9 +157,17 @@
       <button class="btn btn-outline-primary btn-sm" type="button" onclick="addRisk()"><i class="bi bi-plus-lg"></i> Add risk</button>
     </section>
 
+    <!-- Photos -->
+    <section class="mb-4">
+      <h2 class="h5 section-title">5) Progress photos</h2>
+      <label class="form-label" for="photos">Photo file names</label>
+      <input id="photos" type="text" class="form-control" placeholder="e.g. 1.jpg, 2.jpg, site-walk.png">
+      <div class="form-text">Separate with commas, in the order you want them shown. Files go in <code>assets/photos/&lt;period&gt;/</code>. Leave blank if there are no photos this period.</div>
+    </section>
+
     <!-- Output controls -->
     <section class="mb-4">
-      <h2 class="h5 section-title">5) Output</h2>
+      <h2 class="h5 section-title">6) Output</h2>
       <div class="row g-3 align-items-end">
         <div class="col-12 col-md-6">
           <div class="form-check form-switch">
@@ -183,6 +191,7 @@
         <li>Percentages are clamped to 0–100 when generating.</li>
         <li>SPI/CPI accept decimals (e.g., 0.96).</li>
         <li>Spent to Date is text, shown on the dashboard exactly as typed (e.g., $2.5M). Leave it as 0 to have the dashboard estimate it from % complete and CPI.</li>
+        <li>List photo file names exactly as saved, including the extension (e.g., 1.jpg). The dashboard loads only the files listed.</li>
         <li>Works offline; no external requests beyond Bootstrap CDN.</li>
       </ul>
     </section>
@@ -325,7 +334,9 @@
         activities: gatherActivities(),
         spi: Number(document.getElementById('spi').value || 0) || 0,
         cpi: Number(document.getElementById('cpi').value || 0) || 0,
-        risks: gatherRisks()
+        risks: gatherRisks(),
+        // Only these files are loaded, so the dashboard never probes for photos.
+        photos: (document.getElementById('photos').value||'').split(',').map(s=>s.trim()).filter(Boolean)
       };
 
       const wrap = document.getElementById('wrapWithKey').checked;

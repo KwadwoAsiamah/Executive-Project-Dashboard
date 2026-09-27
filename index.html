@@ -328,14 +328,16 @@
             from that point on.
             `spentToDate` is the actual spend as display text (e.g. "$2.5M"). Set it
             to "0" and the dashboard estimates it from % complete and CPI instead.
+            `photos` lists the image files in assets/photos/<period-id>/, in the
+            order to show them (e.g. ["1.jpg", "site-walk.png"]). Use [] for none.
 
        Two rules keep the dashboard internally consistent:
          • spi must equal actualPct / plannedPct (the builder can calculate it).
          • Weekly and monthly figures describe the same project, so a month-end
            value should sit between the weekly values either side of it.
 
-       Photos and earned-value charts are looked up by period ID under
-       assets/photos/<period-id>/ and are optional.
+       Photos and the earned-value chart live under assets/photos/<period-id>/.
+       Only the photos listed in `photos` are loaded, so nothing is guessed at.
        ========================================================================= */
     const sample = {
       weeks:["2025-W49","2025-W50","2025-W51","2025-W52","2026-W01","2026-W02","2026-W03","2026-W04"],
@@ -362,6 +364,7 @@
         "projectEnd": "27 Feb 2026",
         "forecastFinish": "27 Feb 2026",
         "spentToDate": "$640k",
+        "photos": ["1.jpg", "2.jpg", "3.jpg"],
         "actualPct": 20,
         "plannedPct": 21,
         "activities": [
@@ -449,6 +452,7 @@
         "projectEnd": "27 Feb 2026",
         "forecastFinish": "27 Feb 2026",
         "spentToDate": "$1.4M",
+        "photos": ["1.jpg", "2.jpg", "3.jpg"],
         "actualPct": 43,
         "plannedPct": 45,
         "activities": [
@@ -536,6 +540,7 @@
         "projectEnd": "27 Feb 2026",
         "forecastFinish": "4 Mar 2026",
         "spentToDate": "$2.1M",
+        "photos": ["1.jpg", "2.jpg", "3.jpg"],
         "actualPct": 62,
         "plannedPct": 66,
         "activities": [
@@ -623,6 +628,7 @@
         "projectEnd": "27 Feb 2026",
         "forecastFinish": "28 Feb 2026",
         "spentToDate": "$2.6M",
+        "photos": ["1.jpg", "2.jpg", "3.jpg"],
         "actualPct": 81,
         "plannedPct": 84,
         "activities": [
@@ -710,6 +716,7 @@
         "projectEnd": "27 Feb 2026",
         "forecastFinish": "27 Feb 2026",
         "spentToDate": "$3.1M",
+        "photos": ["1.jpg", "2.jpg", "3.jpg"],
         "actualPct": 96,
         "plannedPct": 100,
         "activities": [
@@ -796,6 +803,7 @@
         "projectEnd": "27 Feb 2026",
         "forecastFinish": "27 Feb 2026",
         "spentToDate": "$1.6M",
+        "photos": ["1.jpg", "2.jpg", "3.jpg"],
         "actualPct": 47,
         "plannedPct": 50,
         "activities": [
@@ -882,6 +890,7 @@
         "projectEnd": "27 Feb 2026",
         "forecastFinish": "4 Mar 2026",
         "spentToDate": "$1.7M",
+        "photos": ["1.jpg", "2.jpg", "3.jpg"],
         "actualPct": 49,
         "plannedPct": 55,
         "activities": [
@@ -969,6 +978,7 @@
         "projectEnd": "27 Feb 2026",
         "forecastFinish": "4 Mar 2026",
         "spentToDate": "$1.9M",
+        "photos": ["1.jpg", "2.jpg", "3.jpg"],
         "actualPct": 55,
         "plannedPct": 60,
         "activities": [
@@ -1056,6 +1066,7 @@
         "projectEnd": "27 Feb 2026",
         "forecastFinish": "28 Feb 2026",
         "spentToDate": "$2.0M",
+        "photos": ["1.jpg", "2.jpg", "3.jpg"],
         "actualPct": 60,
         "plannedPct": 64,
         "activities": [
@@ -1142,6 +1153,7 @@
         "projectEnd": "27 Feb 2026",
         "forecastFinish": "28 Feb 2026",
         "spentToDate": "$2.1M",
+        "photos": ["1.jpg", "2.jpg", "3.jpg"],
         "actualPct": 65,
         "plannedPct": 68,
         "activities": [
@@ -1229,6 +1241,7 @@
         "projectEnd": "27 Feb 2026",
         "forecastFinish": "28 Feb 2026",
         "spentToDate": "$2.3M",
+        "photos": ["1.jpg", "2.jpg", "3.jpg"],
         "actualPct": 70,
         "plannedPct": 73,
         "activities": [
@@ -1316,6 +1329,7 @@
         "projectEnd": "27 Feb 2026",
         "forecastFinish": "27 Feb 2026",
         "spentToDate": "$2.4M",
+        "photos": ["1.jpg", "2.jpg", "3.jpg"],
         "actualPct": 74,
         "plannedPct": 77,
         "activities": [
@@ -1403,6 +1417,7 @@
         "projectEnd": "27 Feb 2026",
         "forecastFinish": "27 Feb 2026",
         "spentToDate": "$2.5M",
+        "photos": ["1.jpg", "2.jpg", "3.jpg"],
         "actualPct": 79,
         "plannedPct": 82,
         "activities": [
@@ -1495,6 +1510,9 @@
       // reported" — spentToDate() then estimates it from % complete and CPI.
       const spentText = (periodJSONID.spentToDate === undefined || periodJSONID.spentToDate === null)
         ? '0' : String(periodJSONID.spentToDate).trim();
+      // Photo file names for this period. Listing them means the dashboard loads
+      // exactly these files instead of probing for 1..24 in every format.
+      const photos = Array.isArray(periodJSONID.photos) ? periodJSONID.photos : [];
       const risks = periodJSONID.risks;
       const activities = periodJSONID.activities;
       const spi = periodJSONID.spi;
@@ -1505,6 +1523,7 @@
         projectEnd,
         forecastFinish,
         spentText,
+        photos,
         kpis:{
           percent_complete:periodJSONID.actualPct,
           planned_percent_complete:periodJSONID.plannedPct,
@@ -1581,8 +1600,10 @@
       card.appendChild(body); col.appendChild(card); return col;
     }
 
+    // The chart is only requested while the Earned Value module is switched on,
+    // so teams that never use EVM never request a chart they don't have.
     function renderEV(){
-      const a = sample.periods[state.selected];
+      if(!document.getElementById('toggleEVM').checked) return;
       const periodId = state.selected;
       const base = `assets/photos/${periodId}/earned-value.jpg`;
       const img = document.getElementById('evChartImg');
@@ -1610,119 +1631,45 @@
       });
     }
 
-    // Photos: local /assets/photos/<period>/1..24.(jpg|jpeg|png|webp)
-    let photosReady = Promise.resolve(); // resolves when this period's scan is done
-
+    // Photos: the files listed in periodJSON[<period>].photos, loaded from
+    // assets/photos/<period>/. A static page cannot list a folder, so the list is
+    // the source of truth: no list, no requests, no console errors. A listed file
+    // that is missing is dropped from the grid (and logs one honest 404).
     function renderPhotos(){
-      const periodId = state.selected;
+      const a = sample.periods[state.selected];
       const root = document.getElementById('photos');
-      root.innerHTML='';
-      const base = `assets/photos/${periodId}/`;
-      const MAX = 24;
-      const EXTS = ['jpg','jpeg','png','webp'];
-      const loadedSrcs = [];
+      const base = `assets/photos/${state.selected}/`;
+      const srcs = a.photos.map(f => base + encodeURI(String(f).trim())).filter(s => s !== base);
+      root.innerHTML = '';
 
-      // Each thumbnail slot resolves either by loading or by being removed, so the
-      // grid is only finalised once every slot has reported back.
-      let remaining = MAX;
-      let resolveReady;
-      photosReady = new Promise(res => (resolveReady = res));
-
-      const extractNum = (src) => {
-        // assets/photos/<period>/12.jpg  OR  file:///.../12.jpg
-        const m = String(src).match(/\/(\d+)\.(jpg|jpeg|png|webp)(?:\?.*)?$/i);
-        return m ? parseInt(m[1], 10) : Number.MAX_SAFE_INTEGER;
-      };
-
-      const finalizeSlot = () => {
-        remaining--;
-        if (remaining === 0) {
-          // stable order: 1,2,3... (not load-order)
-          loadedSrcs.sort((a,b)=> extractNum(a) - extractNum(b));
-          resolveReady();
-        }
-      };
+      const showEmpty = () => { root.innerHTML = '<div class="empty-state">No photos for this period.</div>'; };
+      if(!srcs.length){ showEmpty(); return; }
 
       const row = document.createElement('div');
       row.className = 'row row-cols-2 row-cols-md-3 row-cols-lg-4 g-2 photo-grid';
+      const loaded = srcs.slice(); // shrinks if a listed file turns out to be missing
 
-      for(let i=1;i<=MAX;i++){
-        const col = document.createElement('div'); col.className='col';
-        const link = document.createElement('a');
-        link.href='#';
-
+      srcs.forEach((src, i) => {
+        const col = document.createElement('div'); col.className = 'col';
+        const link = document.createElement('a'); link.href = '#';
         const img = document.createElement('img');
-        img.className='img-fluid rounded border photo-thumb';
-        img.alt = `Progress photo ${i}`;
-
-        const srcs = EXTS.map(ext => `${base}${i}.${ext}`);
-        img.dataset.srcIndex = 0;
-
-        const trySet = ()=> {
-          const idx = +img.dataset.srcIndex;
-          if(idx < srcs.length) img.src = srcs[idx];
+        img.className = 'img-fluid rounded border photo-thumb';
+        img.alt = `Progress photo ${i+1}`;
+        img.onerror = () => {
+          loaded.splice(loaded.indexOf(src), 1);
+          col.remove();
+          if(!row.children.length) showEmpty();
         };
-
-        img.onerror = ()=> {
-          let idx = +img.dataset.srcIndex;
-          img.dataset.srcIndex = ++idx;
-          if(idx < srcs.length){
-            img.src = srcs[idx];
-          } else {
-            col.remove();
-            checkEmpty();
-            finalizeSlot(); // image missing — slot resolved
-          }
-        };
-
-        img.onload = ()=> {
-          const finalSrc = img.currentSrc || img.src;
-          img.dataset.finalSrc = finalSrc;
-          if(!loadedSrcs.includes(finalSrc)) loadedSrcs.push(finalSrc);
-
-          finalizeSlot(); // image loaded — slot resolved
-
-          // IMPORTANT: open modal + build carousel only after gallery has settled
-          link.addEventListener('click', async (e)=>{
-            e.preventDefault();
-            e.stopImmediatePropagation();
-
-            // show modal immediately with a tiny loading placeholder
-            const modalEl = document.getElementById('photoModal');
-            const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
-            const inner = document.querySelector('#photoCarousel .carousel-inner');
-            inner.innerHTML = `
-              <div class="carousel-item active">
-                <div class="d-flex align-items-center justify-content-center" style="height:55vh;">
-                  <div class="text-center text-muted">
-                    <div class="spinner-border" role="status"></div>
-                    <div class="mt-2">Loading photos…</div>
-                  </div>
-                </div>
-              </div>`;
-            modal.show();
-
-            await photosReady;
-
-            const list = loadedSrcs.slice(); // final, sorted
-            const start = Math.max(0, list.indexOf(img.dataset.finalSrc || img.src));
-            buildCarousel(list, start);
-          }, { capture:true });
-        };
-
-        trySet();
-        link.appendChild(img);
-        col.appendChild(link);
-        row.appendChild(col);
-      }
+        img.src = src;
+        link.addEventListener('click', e => {
+          e.preventDefault();
+          bootstrap.Modal.getOrCreateInstance(document.getElementById('photoModal')).show();
+          buildCarousel(loaded, Math.max(0, loaded.indexOf(src)));
+        });
+        link.appendChild(img); col.appendChild(link); row.appendChild(col);
+      });
 
       root.appendChild(row);
-
-      function checkEmpty(){
-        if(!root.querySelector('img')){
-          root.innerHTML = '<div class="empty-state">No photos for this period.</div>';
-        }
-      }
     }
 
     function buildCarousel(arr, startIndex=0){
@@ -2035,7 +1982,7 @@
       document.getElementById('granMonth').addEventListener('change', ()=>{ state.granularity='month'; state.selected = sample.months[sample.months.length-1]; renderAll(); });
       document.getElementById('printBtn').addEventListener('click', ()=> window.print());
       window.addEventListener('hashchange', ()=>{ initFromHash(); renderAll(); });
-      document.getElementById('toggleEVM').addEventListener('change', e=>{ document.getElementById('evmModule').classList.toggle('d-none', !e.target.checked); });
+      document.getElementById('toggleEVM').addEventListener('change', e=>{ document.getElementById('evmModule').classList.toggle('d-none', !e.target.checked); renderEV(); });
     }
 
     // ---------- Init ----------
