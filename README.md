@@ -2,7 +2,7 @@
 
 A lightweight, brandable project dashboard built with **Bootstrap 5** and **vanilla JavaScript**. It presents a project’s **weekly and monthly progression** with an executive summary, RAG status, plain-language Schedule and Budget health, key dates, KPIs (Actual / Planned / Variance), highlights, deliverables, risks, and progress photos.
 
-Earned Value (SPI / CPI and an S-curve image) and a Kanban board ship as **optional modules** — switched off by default and revealed with a toggle — so teams that don’t use Earned Value aren’t forced to show it.
+Earned Value (SPI / CPI and an S-curve image) ships as an **optional module** — switched off by default and revealed with a toggle — so teams that don’t use Earned Value aren’t forced to show it.
 
 The dashboard is intentionally **static**: it runs on any static web host (or opens directly in a browser) and is maintained through a small JSON block and an image folder.
 
@@ -24,7 +24,7 @@ It ships with a fully fictional sample — the **Meadowview Community Solar Farm
 * **Weekly & monthly progression**, with the **latest period auto-selected** by default in each view.
 * **No charting libraries** — visuals are tiles, CSS bars, and images for maximum portability.
 * **Brandable** — swap the header mark, colours, and typeface to match your own identity.
-* **Optional modules** — Earned Value (SPI/CPI + chart) and a Kanban board toggle on or off, keeping the default view executive-friendly.
+* **Optional Earned Value module** — SPI/CPI tiles and chart toggle on or off, keeping the default view executive-friendly.
 * **Derived automatically** — the current phase, deliverable statuses, and the “Upcoming” list are all calculated from a single percentage, so there is less to keep in sync by hand.
 
 > **Note on connectivity:** the dashboard loads Bootstrap, Bootstrap Icons, and the IBM Plex Sans web font from CDNs, so an internet connection is needed for full styling. Opened fully offline it still works and degrades gracefully to system fonts.
@@ -110,6 +110,7 @@ const periodJSON = {
     rag: "Green",                 // "Red" | "Amber" | "Green"
     projectEnd: "27 Feb 2026",    // Baseline finish — change only on a re-baseline
     forecastFinish: "27 Feb 2026",// Where the project is now expected to finish
+    spentToDate: "$2.5M",         // Actual spend, shown as written — "0" to estimate from CPI
     actualPct: 79,                // % complete (Actual)
     plannedPct: 82,               // % complete (Planned)
     activities: [                 // Activities bar chart (Actual vs Planned)
@@ -117,7 +118,7 @@ const periodJSON = {
       { name: "Electrical, Testing & Commissioning", actual: 0, planned: 0 }
     ],
     spi: 0.96,                    // Schedule Performance Index — must equal actualPct / plannedPct
-    cpi: 1.00,                    // Cost Performance Index — also drives "Spent to date"
+    cpi: 1.00,                    // Cost Performance Index — drives Budget health
     risks: [                      // Risks table
       { risk: "Adverse winter weather disrupts works", likelihood: "High", impact: "Medium",
         mitigation: "Maintain a weather-contingency plan with weekend-shift capacity.", status: "Open" }
@@ -127,6 +128,8 @@ const periodJSON = {
 ```
 
 **Baseline vs forecast finish.** `projectEnd` is the *agreed* finish date and `forecastFinish` is where the project is currently heading; the gap between them is the story the dashboard tells. Both live inside each period rather than at project level, because a schedule can be formally re-baselined partway through — when that happens, change `projectEnd` from that period onward and leave earlier periods untouched, so the history still shows what was agreed at the time. If you omit `projectEnd`, the dashboard falls back to that period's `forecastFinish`.
+
+**Spent to date.** `spentToDate` is text, and the Spent to date tile shows it exactly as you write it — `"$2.5M"`, `"£740k"`, `"GH₵ 1.2M"`. Use it when you have the real figure from your finance system. Set it to `"0"` (or leave it out) and the dashboard estimates the spend instead, from % complete, the approved budget, and CPI: *spend = (actualPct ÷ 100 × approved budget) ÷ CPI*. The estimate is only as good as your CPI, so a reported figure is always better when you have one.
 
 **Narrative fields.** `summary` appears in the Executive Summary card and `wins` feeds **Key Highlights** (top 5). `asks` and `escalations` render beneath as labelled lists, and any entry reading “None” is dropped automatically — so you can leave the placeholders in place without cluttering the card. There is no `narrative.risks` field: project risks belong in the top-level `risks` array, which drives the Top Risks table.
 
@@ -199,8 +202,8 @@ Windows are **allowed to overlap** — procurement starting at 5 while site prep
 
 * **Executive Summary** — the period’s narrative summary, followed by Decisions needed and Escalations.
 * **Overall Status** — Overall status (RAG).
-* **Budget** — plain-language Budget health, Approved budget, and Spent to date (calculated from % complete and CPI).
-* **Schedule** — plain-language Schedule health, plus **% Complete**, **Planned % Complete**, and **% Variance (Actual − Planned)**.
+* **Budget** — plain-language Budget health, Approved budget, and Spent to date (the reported `spentToDate`, or an estimate from % complete and CPI when it is `"0"`).
+* **Schedule** — plain-language Schedule health, a progress chart comparing **% Complete** with **Planned % Complete**, and **Schedule Variance (Actual − Planned)**.
 * **Deliverables Progress** — pure-CSS dual bars (Actual vs Planned) with in-bar labels.
 * **Dates** — Project start, Project end, and Forecast finish.
 * **Current phase** — derived from `PHASES` (see above).
@@ -260,6 +263,7 @@ const periodJSON = {
     rag: "Green",
     projectEnd: "27 Feb 2026",
     forecastFinish: "27 Feb 2026",
+    spentToDate: "0",
     actualPct: 88,
     plannedPct: 90,
     activities: [
@@ -275,6 +279,8 @@ const periodJSON = {
   }
 };
 ```
+
+   Here `spentToDate` is `"0"`, so the dashboard estimates it: (88 ÷ 100 × $3.2M) ÷ 1.00 ≈ **$2.8M**. Replace it with the real figure once finance confirms it.
 
 3. Add images (optional):
 

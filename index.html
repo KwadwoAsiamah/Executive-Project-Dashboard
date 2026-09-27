@@ -88,8 +88,8 @@
     .btn-close {padding: calc(1rem * .5) calc(1rem * .5); margin: calc(-.5 * 1rem) calc(-.5 * 1rem) calc(-.5 * 1rem) auto; filter: invert(1) grayscale(100%) brightness(200%); position: absolute; top: 1rem; right: 1rem; z-index: 2}
 
     @media (min-width: 768px) {.metric-big {font-size: 1.65rem}}
-    
-    
+
+
     /* Row-1 status/date tiles: even 2x2 grid that fills the summary height */
     /* Key dates / phase: 2x2 grid that matches the height of the chart beside it */
     #keyDates {display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: 1fr; gap: 1rem}
@@ -326,6 +326,8 @@
             Each entry carries its own `projectEnd` (the agreed finish) alongside
             `forecastFinish`, so a mid-project re-baseline only affects the periods
             from that point on.
+            `spentToDate` is the actual spend as display text (e.g. "$2.5M"). Set it
+            to "0" and the dashboard estimates it from % complete and CPI instead.
 
        Two rules keep the dashboard internally consistent:
          • spi must equal actualPct / plannedPct (the builder can calculate it).
@@ -359,6 +361,7 @@
         "rag": "Green",
         "projectEnd": "27 Feb 2026",
         "forecastFinish": "27 Feb 2026",
+        "spentToDate": "$640k",
         "actualPct": 20,
         "plannedPct": 21,
         "activities": [
@@ -445,6 +448,7 @@
         "rag": "Green",
         "projectEnd": "27 Feb 2026",
         "forecastFinish": "27 Feb 2026",
+        "spentToDate": "$1.4M",
         "actualPct": 43,
         "plannedPct": 45,
         "activities": [
@@ -531,6 +535,7 @@
         "rag": "Amber",
         "projectEnd": "27 Feb 2026",
         "forecastFinish": "4 Mar 2026",
+        "spentToDate": "$2.1M",
         "actualPct": 62,
         "plannedPct": 66,
         "activities": [
@@ -617,6 +622,7 @@
         "rag": "Green",
         "projectEnd": "27 Feb 2026",
         "forecastFinish": "28 Feb 2026",
+        "spentToDate": "$2.6M",
         "actualPct": 81,
         "plannedPct": 84,
         "activities": [
@@ -703,6 +709,7 @@
         "rag": "Green",
         "projectEnd": "27 Feb 2026",
         "forecastFinish": "27 Feb 2026",
+        "spentToDate": "$3.1M",
         "actualPct": 96,
         "plannedPct": 100,
         "activities": [
@@ -788,6 +795,7 @@
         "rag": "Amber",
         "projectEnd": "27 Feb 2026",
         "forecastFinish": "27 Feb 2026",
+        "spentToDate": "$1.6M",
         "actualPct": 47,
         "plannedPct": 50,
         "activities": [
@@ -873,6 +881,7 @@
         "rag": "Red",
         "projectEnd": "27 Feb 2026",
         "forecastFinish": "4 Mar 2026",
+        "spentToDate": "$1.7M",
         "actualPct": 49,
         "plannedPct": 55,
         "activities": [
@@ -959,6 +968,7 @@
         "rag": "Amber",
         "projectEnd": "27 Feb 2026",
         "forecastFinish": "4 Mar 2026",
+        "spentToDate": "$1.9M",
         "actualPct": 55,
         "plannedPct": 60,
         "activities": [
@@ -1045,6 +1055,7 @@
         "rag": "Green",
         "projectEnd": "27 Feb 2026",
         "forecastFinish": "28 Feb 2026",
+        "spentToDate": "$2.0M",
         "actualPct": 60,
         "plannedPct": 64,
         "activities": [
@@ -1130,6 +1141,7 @@
         "rag": "Green",
         "projectEnd": "27 Feb 2026",
         "forecastFinish": "28 Feb 2026",
+        "spentToDate": "$2.1M",
         "actualPct": 65,
         "plannedPct": 68,
         "activities": [
@@ -1216,6 +1228,7 @@
         "rag": "Green",
         "projectEnd": "27 Feb 2026",
         "forecastFinish": "28 Feb 2026",
+        "spentToDate": "$2.3M",
         "actualPct": 70,
         "plannedPct": 73,
         "activities": [
@@ -1302,6 +1315,7 @@
         "rag": "Green",
         "projectEnd": "27 Feb 2026",
         "forecastFinish": "27 Feb 2026",
+        "spentToDate": "$2.4M",
         "actualPct": 74,
         "plannedPct": 77,
         "activities": [
@@ -1388,6 +1402,7 @@
         "rag": "Green",
         "projectEnd": "27 Feb 2026",
         "forecastFinish": "27 Feb 2026",
+        "spentToDate": "$2.5M",
         "actualPct": 79,
         "plannedPct": 82,
         "activities": [
@@ -1476,6 +1491,10 @@
       // Baseline finish for this period. Falls back to the forecast if omitted,
       // so older period entries without projectEnd still render.
       const projectEnd = periodJSONID.projectEnd || forecastFinish;
+      // Reported spend as display text ("$2.5M"). "0" or missing means "not
+      // reported" — spentToDate() then estimates it from % complete and CPI.
+      const spentText = (periodJSONID.spentToDate === undefined || periodJSONID.spentToDate === null)
+        ? '0' : String(periodJSONID.spentToDate).trim();
       const risks = periodJSONID.risks;
       const activities = periodJSONID.activities;
       const spi = periodJSONID.spi;
@@ -1485,6 +1504,7 @@
         rag,
         projectEnd,
         forecastFinish,
+        spentText,
         kpis:{
           percent_complete:periodJSONID.actualPct,
           planned_percent_complete:periodJSONID.plannedPct,
@@ -1756,7 +1776,7 @@
       {name:'Panel Installation', t:45},
       {name:'Electrical & Commissioning', t:82}
     ];
-    
+
     const DELIVERABLES = [
       {name:'Site preparation & access', start:0, done:10},
       {name:'Modules, inverters & structures procured', start:5, done:40},
@@ -1764,13 +1784,22 @@
       {name:'PV array installation', start:45, done:88},
       {name:'Grid connection & commissioning', start:80, done:100}
     ];
-    
-    
+
+
     function money(n){ n=Math.round(n); const s=n<0?'-':''; n=Math.abs(n); if(n>=1e6) return s+'$'+(n/1e6).toFixed(1)+'M'; if(n>=1e3) return s+'$'+Math.round(n/1e3)+'k'; return s+'$'+n; }
-    
-    // CPI = Earned Value / Actual Cost, so Actual Cost = Earned Value / CPI.
-    function spentToDate(a){ return a.kpis.percent_complete/100 * PROJECT.approved / a.kpis.cpi; }
-    
+
+    // Spent to date, as display text.
+    // The reported figure from periodJSON is shown exactly as written ("$2.5M").
+    // If it is "0" (or any text whose number is zero, such as "$0"), the spend has
+    // not been reported, so it is estimated instead:
+    //   CPI = Earned Value / Actual Cost, so Actual Cost = Earned Value / CPI.
+    function spentToDate(a){
+      const reported = parseFloat(String(a.spentText).replace(/[^0-9.]/g,''));
+      if(reported > 0) return a.spentText;
+      if(!(a.kpis.cpi > 0)) return '\u2014'; // no CPI either: nothing to estimate from
+      return money(a.kpis.percent_complete/100 * PROJECT.approved / a.kpis.cpi);
+    }
+
     // Schedule tolerance bands. SPI is Earned Value / Planned Value, which with
     // percent-complete figures is simply actualPct / plannedPct. A project within 5%
     // of plan still counts as On track; more than 10% behind is Behind.
@@ -1794,7 +1823,7 @@
                   : 'Behind';
       return Object.assign({text: label}, spiBand(spi));
     }
-    
+
     function budgetHealth(a){
       // colour matches the CPI tile bands: >=1 green, >=0.95 amber, else red
       const cpi = a.kpis.cpi;
@@ -1804,7 +1833,7 @@
       const text = cpi>=1 ? (over<0 ? Math.abs(over)+'% under' : 'On budget') : Math.max(1,over)+'% over';
       return {text, cls, color};
     }
-    
+
     // Each PHASES entry records the % complete at which that phase *starts*; a phase
     // ends where the next one begins. Walking the list and keeping the last threshold
     // passed therefore returns the phase the project is currently in.
@@ -1813,7 +1842,7 @@
       for(let i=0;i<PHASES.length;i++){ if(p >= PHASES[i].t) idx=i; }
       return {name:PHASES[idx].name, index:idx+1, total:PHASES.length};
     }
-    
+
     // Each deliverable owns a window on the same 0-100 scale (`start` to `done`).
     // Windows may overlap, which is how parallel workstreams appear. `done` is tested
     // first because a finished item also satisfies the `start` test.
@@ -1821,14 +1850,14 @@
       const p = a.kpis.percent_complete;
       return DELIVERABLES.map(d=>({name:d.name, status: p>=d.done?'Done':(p>d.start?'In progress':'Planned')}));
     }
-    
+
     // "Upcoming" needs no data of its own: it is the next few deliverables not yet Done.
     function upcomingFor(a){
       const rem = deliverablesFor(a).filter(d=>d.status!=='Done').slice(0,4)
         .map(d=> d.name);
       return rem.length ? rem : ['Final handover & close-out'];
     }
-    
+
     // Escapes a string for safe use inside an HTML attribute.
     function attr(s){
       return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;')
@@ -1848,7 +1877,7 @@
         + '<div class="metric-label mb-1">'+label+'</div><div class="metric-big">'+value+'</div>'
         + '</div></div></div></div>';
     }
-    
+
     // Bare tile that fills whatever card it is dropped into (no wrapper markup).
     function plainTile(cls, style, label, value, full){
       return '<div class="metric-tile '+cls+' h-100" title="'+tipFor(label,value,full)+'" data-bs-toggle="tooltip" style="'+style+'">'
@@ -1862,13 +1891,13 @@
         + '<div class="metric-label mb-1">'+label+'</div><div class="'+big+'">'+value+'</div>'
         + '</div></div></div>';
     }
-    
+
     function ragTile(a, builder){
       const cls = a.rag==='Red'?'bg-danger':a.rag==='Amber'?'bg-warning':a.rag==='Green'?'bg-success':'bg-secondary';
       const color = a.rag==='Amber'?'#1f2937':'#fff';
       return builder(cls, 'color:'+color, 'Overall status', a.rag);
     }
-    
+
     // Overall status sits alone in its own column so the RAG call is the first
     // thing the eye lands on after the summary.
     function renderStatusTile(){
@@ -1887,16 +1916,16 @@
         + gridTile('tile-neutral clamp-value','', 'Current phase',
                    ph.name + ' (' + ph.index + '/' + ph.total + ')');
     }
-    
+
     function renderBudgetRow(){
       const a = sample.periods[state.selected];
       const bud = budgetHealth(a);
       document.getElementById('budgetTiles').innerHTML =
           tileHTML(bud.cls, 'color:'+bud.color, 'Budget', bud.text)
         + tileHTML('tile-neutral','', 'Approved budget', money(PROJECT.approved))
-        + tileHTML('tile-neutral','', 'Spent to date', money(spentToDate(a)));
+        + tileHTML('tile-neutral','', 'Spent to date', spentToDate(a));
     }
-    
+
     function renderScheduleRow(){
       const a = sample.periods[state.selected];
       const sch = scheduleHealth(a);
@@ -1931,18 +1960,18 @@
         + '</div>'
         + '</div></div></div>';
     }
-    
+
     function listCard(elId, items, emptyText){
       const el = document.getElementById(elId);
       el.innerHTML = (items && items.length)
         ? '<ul class="mb-0 small ps-3">'+items.map(x=>'<li class="mb-1">'+x+'</li>').join('')+'</ul>'
         : '<div class="empty-state small">'+emptyText+'</div>';
     }
-    
+
     function renderHighlights(){ const a=sample.periods[state.selected]; listCard('highlights', (a.narrative.wins||[]).slice(0,5), 'No highlights this period.'); }
-    
+
     function renderUpcoming(){ const a=sample.periods[state.selected]; listCard('upcoming', upcomingFor(a), '\u2014'); }
-    
+
     function renderDeliverables(){
       const a=sample.periods[state.selected];
       document.getElementById('deliverables').innerHTML = deliverablesFor(a).map(d=>{
@@ -1950,7 +1979,7 @@
         return '<div class="d-flex justify-content-between align-items-center small mb-2"><span>'+d.name+'</span><span class="badge '+badge+'">'+d.status+'</span></div>';
       }).join('');
     }
-    
+
     function renderEVM(){
       const a = sample.periods[state.selected];
       const row = document.getElementById('evmKpis'); row.innerHTML='';
@@ -1958,8 +1987,8 @@
       row.appendChild(makeMetricTile('CPI', a.kpis.cpi, '> 1.0 under budget; = 1.0 on budget; < 1.0 over budget'));
       renderEV();
     }
-    
-    
+
+
     function renderNarrative(){
       const n = sample.periods[state.selected].narrative;
       const root = document.getElementById('narrative');
@@ -1992,7 +2021,7 @@
       });
 
       const buttonElement = document.querySelector('.btn-close');
-      buttonElement.onclick = function(){      
+      buttonElement.onclick = function(){
         if (buttonElement) {
           buttonElement.blur();
         }
